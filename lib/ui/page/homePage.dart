@@ -14,18 +14,18 @@ import 'package:flutter_twitter_clone/state/suggestionUserState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/state/notificationState.dart';
 import 'package:flutter_twitter_clone/state/searchState.dart';
-import 'package:flutter_twitter_clone/ui/page/feed/feedPage.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/feedPostDetail.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/suggestedUsers.dart';
-import 'package:flutter_twitter_clone/ui/page/message/chatListPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/caregiverRecapPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/companionPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/memoriesPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/snippetsPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
 import 'package:flutter_twitter_clone/widgets/bottomMenuBar/bottomMenuBar.dart';
 import 'package:provider/provider.dart';
 
 import 'common/locator.dart';
 import 'common/sidebar.dart';
-import 'notification/notificationPage.dart';
-import 'search/SearchPage.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -190,18 +190,18 @@ class _HomePageState extends State<HomePage> {
   Widget _getPage(int index) {
     switch (index) {
       case 0:
-        return FeedPage(
+        return MemoriesPage(
           scaffoldKey: _scaffoldKey,
           refreshIndicatorKey: refreshIndicatorKey,
         );
       case 1:
-        return SearchPage(scaffoldKey: _scaffoldKey);
+        return CompanionHomePage(scaffoldKey: _scaffoldKey);
       case 2:
-        return NotificationPage(scaffoldKey: _scaffoldKey);
+        return SnippetsPage(scaffoldKey: _scaffoldKey);
       case 3:
-        return ChatListPage(scaffoldKey: _scaffoldKey);
+        return CaregiverRecapPage(scaffoldKey: _scaffoldKey);
       default:
-        return FeedPage(scaffoldKey: _scaffoldKey);
+        return MemoriesPage(scaffoldKey: _scaffoldKey);
     }
   }
 

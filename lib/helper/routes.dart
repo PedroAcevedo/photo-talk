@@ -7,6 +7,7 @@ import 'package:flutter_twitter_clone/ui/page/common/splash.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/composeTweet/composeTweet.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/composeTweet/state/composeTweetState.dart';
 import 'package:flutter_twitter_clone/ui/page/homePage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/uploadMemoryPage.dart';
 import 'package:flutter_twitter_clone/ui/page/message/conversationInformation/conversationInformation.dart';
 import 'package:flutter_twitter_clone/ui/page/message/newMessagePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
@@ -96,6 +97,9 @@ class Routes {
                   child:
                       const ComposeTweetPage(isRetweet: false, isTweet: true),
                 ));
+      case "UploadMemoryPage":
+        return CustomRoute<bool>(
+            builder: (BuildContext context) => const UploadMemoryPage());
       case "WelcomePage":
         return CustomRoute<bool>(
             builder: (BuildContext context) => const WelcomePage());

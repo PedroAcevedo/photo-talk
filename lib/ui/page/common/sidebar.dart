@@ -266,21 +266,31 @@ class _SidebarMenuState extends State<SidebarMenu> {
                         context, ProfilePage.getRoute(profileId: state.userId));
                   }),
                   _menuListRowButton(
-                    'Bookmark',
+                    'Add a memory',
+                    icon: AppIcon.image,
+                    isEnable: true,
+                    onPressed: () {
+                      _navigateTo('UploadMemoryPage');
+                    },
+                  ),
+                  _menuListRowButton(
+                    'Saved memories',
                     icon: AppIcon.bookmark,
                     isEnable: true,
                     onPressed: () {
                       Navigator.push(context, BookmarkPage.getRoute());
                     },
                   ),
-                  _menuListRowButton('Lists', icon: AppIcon.lists),
-                  _menuListRowButton('Moments', icon: AppIcon.moments),
+                  _menuListRowButton('Family storyline',
+                      icon: AppIcon.lists, isEnable: true),
+                  _menuListRowButton('Story snippets',
+                      icon: AppIcon.moments, isEnable: true),
                   const Divider(),
-                  _menuListRowButton('Settings and privacy', isEnable: true,
+                  _menuListRowButton('Privacy and access', isEnable: true,
                       onPressed: () {
                     _navigateTo('SettingsAndPrivacyPage');
                   }),
-                  _menuListRowButton('Help Center'),
+                  _menuListRowButton('Help and support'),
                   const Divider(),
                   _menuListRowButton('Logout',
                       icon: null, onPressed: _logOut, isEnable: true),
