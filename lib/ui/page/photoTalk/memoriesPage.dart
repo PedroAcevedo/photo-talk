@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
@@ -13,9 +15,10 @@ import 'widgets/memoryCard.dart';
 /// "Today's Memories" feed - the primary view for the care recipient.
 ///
 /// Pulls from the existing FeedState (FeedModel) and renders each item as a
-/// photo-first memory card. Falls back to sample memories when the feed is
-/// empty so the UI is always demonstrable.
-class MemoriesPage extends StatelessWidget {
+/// photo-first memory card. If the database call doesn't come back within
+/// a few seconds we stop showing the spinner and surface the empty state
+/// (plus a small banner) so the user is never stuck on a loading dot.
+class MemoriesPage extends StatefulWidget {
   const MemoriesPage({
     Key? key,
     required this.scaffoldKey,
@@ -24,6 +27,38 @@ class MemoriesPage extends StatelessWidget {
 
   final GlobalKey<ScaffoldState> scaffoldKey;
   final GlobalKey<RefreshIndicatorState>? refreshIndicatorKey;
+
+  @override
+  State<MemoriesPage> createState() => _MemoriesPageState();
+}
+
+class _MemoriesPageState extends State<MemoriesPage> {
+  Timer? _loadingTimeout;
+  bool _timedOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // If the feed query hasn't come back within 5s, give up on the spinner.
+    _loadingTimeout = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadingTimeout?.cancel();
+    super.dispose();
+  }
+
+  void _retry(BuildContext context) {
+    setState(() => _timedOut = false);
+    _loadingTimeout?.cancel();
+    _loadingTimeout = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+    Provider.of<FeedState>(context, listen: false).getDataFromDatabase();
+  }
 
   String _greeting() {
     final h = DateTime.now().hour;
@@ -49,11 +84,10 @@ class MemoriesPage extends StatelessWidget {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          key: refreshIndicatorKey,
+          key: widget.refreshIndicatorKey,
           color: PhotoTalkPalette.primary,
           onRefresh: () async {
-            final feedState = Provider.of<FeedState>(context, listen: false);
-            feedState.getDataFromDatabase();
+            _retry(context);
           },
           child: CustomScrollView(
             slivers: [
@@ -65,7 +99,7 @@ class MemoriesPage extends StatelessWidget {
                 leading: IconButton(
                   icon: const Icon(Icons.menu_rounded,
                       color: PhotoTalkPalette.textPrimary, size: 28),
-                  onPressed: () => scaffoldKey.currentState?.openDrawer(),
+                  onPressed: () => widget.scaffoldKey.currentState?.openDrawer(),
                 ),
                 title: Row(
                   children: [
@@ -125,17 +159,13 @@ class MemoriesPage extends StatelessWidget {
         final authState = Provider.of<AuthState>(context, listen: false);
         final List<FeedModel>? list = state.getTweetList(authState.userModel);
 
-        if (state.isBusy && (list == null || list.isEmpty)) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          );
-        }
-
-        // Real feed data
+        // Real feed data wins immediately and clears any timeout banner.
         if (list != null && list.isNotEmpty) {
+          if (_timedOut) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _timedOut = false);
+            });
+          }
           return SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, i) => _cardFromFeed(context, list[i]),
@@ -144,16 +174,28 @@ class MemoriesPage extends StatelessWidget {
           );
         }
 
-        // Calm, friendly empty state.
+        // Still loading and we haven't timed out yet → small inline spinner.
+        if (state.isBusy && !_timedOut) {
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        // Otherwise: empty state. If we timed out while still busy, add a
+        // small banner so the user understands the database isn't reachable.
         return SliverFillRemaining(
           hasScrollBody: false,
-          child: _emptyState(context),
+          child: _emptyState(context, showOfflineBanner: state.isBusy),
         );
       },
     );
   }
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState(BuildContext context,
+      {bool showOfflineBanner = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       child: Column(
@@ -199,7 +241,61 @@ class MemoriesPage extends StatelessWidget {
                   fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
+          if (showOfflineBanner) ...[
+            const SizedBox(height: 32),
+            _offlineBanner(context),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _offlineBanner(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: PhotoTalkPalette.accentRose.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: PhotoTalkPalette.accentRose.withOpacity(0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                color: PhotoTalkPalette.accentRose),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Couldn't reach the memories database",
+                      style: PhotoTalkText.body
+                          .copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Check that Realtime Database is enabled in your Firebase project, and that the security rules allow access.',
+                    style: PhotoTalkText.caption.copyWith(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: PhotoTalkPalette.accentRose,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _retry(context),
+                    child: const Text('Try again',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -113,13 +114,16 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     );
 
     try {
-      if (_photo != null) {
-        final imagePath = await feedState.uploadFile(_photo!);
-        if (imagePath != null) {
-          model.imagePath = imagePath;
-        }
-      }
-      await feedState.createTweet(model);
+      // 15s total budget — if Firebase can't be reached we surface a
+      // clear error instead of leaving the user stuck on the spinner.
+      await _saveWithTimeout(feedState, model).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException(
+          "Couldn't reach Firebase. Check that Realtime Database "
+          "(and Storage, if you attached a photo) are enabled and "
+          "that your security rules allow access.",
+        ),
+      );
 
       // Make sure the feed re-reads from the database so the new memory
       // appears in 'Today's Memories' immediately on return.
@@ -136,6 +140,19 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
           ),
         ),
       );
+    } on TimeoutException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: PhotoTalkPalette.accentRose,
+          duration: const Duration(seconds: 6),
+          content: Text(
+            e.message ?? "Couldn't reach Firebase.",
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -143,6 +160,17 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
         SnackBar(content: Text("Couldn't save memory: $e")),
       );
     }
+  }
+
+  Future<void> _saveWithTimeout(
+      FeedState feedState, FeedModel model) async {
+    if (_photo != null) {
+      final imagePath = await feedState.uploadFile(_photo!);
+      if (imagePath != null) {
+        model.imagePath = imagePath;
+      }
+    }
+    await feedState.createTweet(model);
   }
 
   @override
@@ -180,52 +208,59 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          _photoBlock(),
-          const SizedBox(height: 20),
-          _field(
-            controller: _caption,
-            label: 'Caption',
-            hint: 'A short, friendly title for this memory',
-            maxLines: 2,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              _photoBlock(),
+              const SizedBox(height: 20),
+              _field(
+                controller: _caption,
+                label: 'Caption',
+                hint: 'A short, friendly title for this memory',
+                maxLines: 2,
+              ),
+              _field(
+                controller: _who,
+                label: 'Who is in the photo',
+                hint: 'Mom, Dad, Aunt Rose...',
+                icon: Icons.people_alt_outlined,
+              ),
+              _field(
+                controller: _where,
+                label: 'Where was it taken',
+                hint: 'Lake George, summer 1978',
+                icon: Icons.place_outlined,
+              ),
+              _field(
+                controller: _why,
+                label: 'Why it matters',
+                hint: 'A few words about what this memory means',
+                icon: Icons.favorite_border,
+                maxLines: 3,
+              ),
+              _field(
+                controller: _song,
+                label: 'Song (optional)',
+                hint: 'Here Comes the Sun — The Beatles',
+                icon: Icons.music_note_rounded,
+              ),
+              const SizedBox(height: 12),
+              _audioNotePlaceholder(),
+            ],
           ),
-          _field(
-            controller: _who,
-            label: 'Who is in the photo',
-            hint: 'Mom, Dad, Aunt Rose...',
-            icon: Icons.people_alt_outlined,
-          ),
-          _field(
-            controller: _where,
-            label: 'Where was it taken',
-            hint: 'Lake George, summer 1978',
-            icon: Icons.place_outlined,
-          ),
-          _field(
-            controller: _why,
-            label: 'Why it matters',
-            hint: 'A few words about what this memory means',
-            icon: Icons.favorite_border,
-            maxLines: 3,
-          ),
-          _field(
-            controller: _song,
-            label: 'Song (optional)',
-            hint: 'Here Comes the Sun — The Beatles',
-            icon: Icons.music_note_rounded,
-          ),
-          const SizedBox(height: 12),
-          _audioNotePlaceholder(),
-        ],
+        ),
       ),
     );
   }
 
   Widget _photoBlock() {
-    return AspectRatio(
-      aspectRatio: 4 / 3,
+    return SizedBox(
+      // Cap the height so the photo block can't push fields off-screen
+      // on wide layouts (tablet, web).
+      height: 260,
       child: GestureDetector(
         onTap: () => _showPhotoSheet(),
         child: Container(
