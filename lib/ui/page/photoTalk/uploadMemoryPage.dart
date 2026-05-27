@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
@@ -114,19 +117,21 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     );
 
     try {
-      // 15s total budget — if Firebase can't be reached we surface a
-      // clear error instead of leaving the user stuck on the spinner.
-      await _saveWithTimeout(feedState, model).timeout(
-        const Duration(seconds: 15),
+      // We bypass FeedState.uploadFile / createTweet on purpose: those
+      // wrappers swallow every Firebase exception with a `cprint` and
+      // return null, so the user never sees the real error. Writing
+      // directly lets us surface the actual code/message in the UI.
+      await _writeDirectly(model).timeout(
+        const Duration(seconds: 20),
         onTimeout: () => throw TimeoutException(
-          "Couldn't reach Firebase. Check that Realtime Database "
-          "(and Storage, if you attached a photo) are enabled and "
-          "that your security rules allow access.",
+          "Couldn't reach Firebase after 20 seconds. The most common "
+          "causes are: Realtime Database not enabled, the wrong "
+          "databaseURL in firebase_options.dart, or security rules "
+          "still blocking the write.",
         ),
       );
 
-      // Make sure the feed re-reads from the database so the new memory
-      // appears in 'Today's Memories' immediately on return.
+      // Refresh the feed.
       feedState.getDataFromDatabase();
 
       if (!mounted) return;
@@ -143,34 +148,49 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     } on TimeoutException catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: PhotoTalkPalette.accentRose,
-          duration: const Duration(seconds: 6),
-          content: Text(
-            e.message ?? "Couldn't reach Firebase.",
-            style: const TextStyle(color: Colors.white),
-          ),
-        ),
+      _showError(e.message ?? "Couldn't reach Firebase.");
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      // Firebase tells us which service failed: 'firebase_database',
+      // 'firebase_storage', etc.  Surface that.
+      _showError(
+        'Firebase ${e.plugin} error: ${e.code}\n${e.message ?? ''}',
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Couldn't save memory: $e")),
-      );
+      _showError("Couldn't save memory: $e");
     }
   }
 
-  Future<void> _saveWithTimeout(
-      FeedState feedState, FeedModel model) async {
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: PhotoTalkPalette.accentRose,
+        duration: const Duration(seconds: 8),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
+  /// Writes the memory directly to Storage + RTDB so any FirebaseException
+  /// propagates up to the UI instead of being silently swallowed.
+  Future<void> _writeDirectly(FeedModel model) async {
     if (_photo != null) {
-      final imagePath = await feedState.uploadFile(_photo!);
-      if (imagePath != null) {
-        model.imagePath = imagePath;
-      }
+      final filename = DateTime.now().toIso8601String().replaceAll(':', '-') +
+          '_' +
+          _photo!.path.split(Platform.pathSeparator).last;
+      final ref =
+          FirebaseStorage.instance.ref().child('tweetImage').child(filename);
+      await ref.putFile(_photo!);
+      model.imagePath = await ref.getDownloadURL();
     }
-    await feedState.createTweet(model);
+
+    final db = FirebaseDatabase.instance.ref();
+    final newRef = db.child('tweet').push();
+    await newRef.set(model.toJson());
+    model.key = newRef.key;
   }
 
   @override
