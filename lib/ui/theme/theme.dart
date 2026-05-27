@@ -26,7 +26,7 @@ class AppTheme {
           color: Colors.white,
           elevation: 0,
         ),
-    tabBarTheme: TabBarTheme(
+    tabBarTheme: TabBarThemeData(
       labelStyle: TextStyles.titleStyle.copyWith(color: TwitterColor.dodgeBlue),
       unselectedLabelColor: AppColor.darkGrey,
       unselectedLabelStyle:

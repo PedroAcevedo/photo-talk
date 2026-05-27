@@ -5,7 +5,6 @@ import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followingListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/qrCode/scanner.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
 import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
@@ -209,19 +208,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   isTwitterIcon: true,
                   size: 25,
                   iconColor: TwitterColor.dodgeBlue),
-              const Spacer(),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                      context,
-                      ScanScreen.getRoute(
-                          context.read<AuthState>().profileUserModel!));
-                },
-                child: Image.asset(
-                  "assets/images/qr.png",
-                  height: 25,
-                ),
-              ),
               const SizedBox(
                 width: 0,
                 height: 45,

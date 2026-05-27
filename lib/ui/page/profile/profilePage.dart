@@ -11,7 +11,6 @@ import 'package:flutter_twitter_clone/ui/page/profile/EditProfilePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followingListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/profileImageView.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/qrCode/scanner.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/tabPainter.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
@@ -85,9 +84,6 @@ class _ProfilePageState extends State<ProfilePage>
                 onSelected: (d) {
                   if (d.title == "Share") {
                     shareProfile(context);
-                  } else if (d.title == "QR code") {
-                    Navigator.push(context,
-                        ScanScreen.getRoute(authState.profileUserModel));
                   }
                 },
                 itemBuilder: (BuildContext context) {
@@ -648,7 +644,6 @@ class Choice {
 
 const List<Choice> choices = <Choice>[
   Choice(title: 'Share', icon: Icons.directions_car, isEnable: true),
-  Choice(title: 'QR code', icon: Icons.directions_railway, isEnable: true),
   Choice(title: 'Draft', icon: Icons.directions_bike),
   Choice(title: 'View Lists', icon: Icons.directions_boat),
   Choice(title: 'View Moments', icon: Icons.directions_bus),

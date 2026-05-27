@@ -193,10 +193,18 @@ class AuthState extends AppState {
       _userModel!.userId = user!.uid;
       createUser(_userModel!, newUser: true);
       return user!.uid;
+    } on FirebaseAuthException catch (error) {
+      isBusy = false;
+      cprint(error, errorIn: 'signUp');
+      Utility.customSnackBar(
+        context,
+        error.message ?? 'Unable to create account. Please try again.',
+      );
+      return null;
     } catch (error) {
       isBusy = false;
       cprint(error, errorIn: 'signUp');
-      Utility.customSnackBar(context, error.toString());
+      Utility.customSnackBar(context, 'Unable to create account.');
       return null;
     }
   }

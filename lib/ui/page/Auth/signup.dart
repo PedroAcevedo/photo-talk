@@ -28,6 +28,10 @@ class _SignupState extends State<Signup> {
   late TextEditingController _confirmController;
   late CustomLoader loader;
   final _formKey = GlobalKey<FormState>();
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+  }
   @override
   void initState() {
     loader = CustomLoader();
@@ -132,8 +136,18 @@ class _SignupState extends State<Signup> {
       Utility.customSnackBar(context, 'Name length cannot exceed 27 character');
       return;
     }
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
       Utility.customSnackBar(context, 'Please fill form carefully');
+      return;
+    } else if (!_isValidEmail(email)) {
+      Utility.customSnackBar(context, 'Please enter a valid email address');
+      return;
+    } else if (password.length < 6) {
+      Utility.customSnackBar(
+          context, 'Password must be at least 6 characters long');
       return;
     } else if (_passwordController.text != _confirmController.text) {
       Utility.customSnackBar(
@@ -147,7 +161,7 @@ class _SignupState extends State<Signup> {
     int randomNumber = random.nextInt(8);
 
     UserModel user = UserModel(
-      email: _emailController.text.toLowerCase(),
+      email: email,
       bio: 'Edit profile to update bio',
       // contact:  _mobileController.text,
       displayName: _nameController.text,
@@ -160,7 +174,7 @@ class _SignupState extends State<Signup> {
     state
         .signUp(
       user,
-      password: _passwordController.text,
+      password: password,
       context: context,
     )
         .then((status) {
