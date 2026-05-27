@@ -144,14 +144,63 @@ class MemoriesPage extends StatelessWidget {
           );
         }
 
-        // Fall back to sample memories so the view is always alive
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, i) => _cardFromSample(context, kSampleMemories[i]),
-            childCount: kSampleMemories.length,
-          ),
+        // Calm, friendly empty state.
+        return SliverFillRemaining(
+          hasScrollBody: false,
+          child: _emptyState(context),
         );
       },
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: PhotoTalkPalette.primary.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.photo_library_outlined,
+              size: 60,
+              color: PhotoTalkPalette.primary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('No photos today',
+              textAlign: TextAlign.center, style: PhotoTalkText.h2),
+          const SizedBox(height: 8),
+          Text(
+            'When family adds a memory, it will appear here.',
+            textAlign: TextAlign.center,
+            style: PhotoTalkText.caption.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () =>
+                Navigator.of(context).pushNamed('/UploadMemoryPage'),
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('Add a memory'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: PhotoTalkPalette.primary,
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -177,31 +226,6 @@ class MemoriesPage extends StatelessWidget {
         context,
         caption: caption,
         imageUrl: model.imagePath,
-      ),
-    );
-  }
-
-  Widget _cardFromSample(BuildContext context, SampleMemory m) {
-    return MemoryCard(
-      caption: m.caption,
-      who: m.who,
-      where: m.where,
-      why: m.why,
-      imageUrl: m.imageUrl,
-      song: m.song,
-      tags: m.tags,
-      onTalk: () => _openCompanion(
-        context,
-        caption: m.caption,
-        imageUrl: m.imageUrl,
-        why: m.why,
-        who: m.who,
-      ),
-      onPlayMusic: () => _openMusic(
-        context,
-        caption: m.caption,
-        imageUrl: m.imageUrl,
-        song: m.song,
       ),
     );
   }

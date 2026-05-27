@@ -1,33 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
-import 'package:flutter_twitter_clone/ui/page/Auth/widget/googleLoginButton.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
-import 'package:flutter_twitter_clone/widgets/customFlatButton.dart';
-import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
-import 'package:flutter_twitter_clone/widgets/newWidget/customLoader.dart';
+import 'package:flutter_twitter_clone/ui/page/homePage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:provider/provider.dart';
 
+/// PhotoTalk Sign-in form.
+///
+/// On success: pushes HomePage and clears the back stack so the welcome
+/// page doesn't reappear underneath.
 class SignIn extends StatefulWidget {
-  final VoidCallback? loginCallback;
+  const SignIn({Key? key}) : super(key: key);
 
-  const SignIn({Key? key, this.loginCallback}) : super(key: key);
   @override
-  State<StatefulWidget> createState() => _SignInState();
+  State<SignIn> createState() => _SignInState();
 }
 
 class _SignInState extends State<SignIn> {
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
-  late CustomLoader loader;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  @override
-  void initState() {
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
-    loader = CustomLoader();
-    super.initState();
-  }
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -36,132 +29,159 @@ class _SignInState extends State<SignIn> {
     super.dispose();
   }
 
-  Widget _body(BuildContext context) {
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 30),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            const SizedBox(height: 150),
-            _entryField('Enter email', controller: _emailController),
-            _entryField('Enter password',
-                controller: _passwordController, isPassword: true),
-            _emailLoginButton(context),
-            const SizedBox(height: 20),
-            _labelButton('Forget password?', onPressed: () {
-              Navigator.of(context).pushNamed('/ForgetPasswordPage');
-            }),
-            const Divider(
-              height: 30,
-            ),
-            const SizedBox(
-              height: 30,
-            ),
-            GoogleLoginButton(
-              loginCallback: widget.loginCallback!,
-              loader: loader,
-            ),
-            const SizedBox(height: 100),
-          ],
-        ),
-      ),
-    );
-  }
+  Future<void> _submit() async {
+    if (_busy) return;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-  Widget _entryField(String hint,
-      {required TextEditingController controller, bool isPassword = false}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 15),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.emailAddress,
-        style: const TextStyle(
-          fontStyle: FontStyle.normal,
-          fontWeight: FontWeight.normal,
-        ),
-        obscureText: isPassword,
-        decoration: InputDecoration(
-          hintText: hint,
-          border: InputBorder.none,
-          focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(30.0)),
-              borderSide: BorderSide(color: Colors.blue)),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-        ),
-      ),
-    );
-  }
-
-  Widget _labelButton(String title, {Function? onPressed}) {
-    return TextButton(
-      onPressed: () {
-        if (onPressed != null) {
-          onPressed();
-        }
-      },
-      child: Text(
-        title,
-        style: TextStyle(
-            color: TwitterColor.dodgeBlue, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _emailLoginButton(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 35),
-      child: CustomFlatButton(
-        label: "Submit",
-        onPressed: _emailLogin,
-        borderRadius: 30,
-      ),
-    );
-  }
-
-  void _emailLogin() {
-    var state = Provider.of<AuthState>(context, listen: false);
-    if (state.isbusy) {
+    if (!Utility.validateCredentials(context, email, password)) {
       return;
     }
-    loader.showLoader(context);
-    var isValid = Utility.validateCredentials(
-        context, _emailController.text, _passwordController.text);
-    if (isValid) {
-      state
-          .signIn(_emailController.text, _passwordController.text,
-              context: context)
-          .then((status) {
-        if (state.user != null) {
-          loader.hideLoader();
-          Navigator.pop(context);
-          widget.loginCallback!();
-        } else {
-          cprint('Unable to login', errorIn: '_emailLoginButton');
-          loader.hideLoader();
-        }
-      });
-    } else {
-      loader.hideLoader();
+
+    setState(() => _busy = true);
+    final state = Provider.of<AuthState>(context, listen: false);
+
+    final uid = await state.signIn(email, password, context: context);
+
+    if (uid != null) {
+      // signIn() doesn't flip authStatus itself; refresh current user
+      // so AuthStatus and userModel are populated before we navigate.
+      await state.getCurrentUser();
+    }
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    if (state.authStatus == AuthStatus.LOGGED_IN) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+        (route) => false,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
+      backgroundColor: PhotoTalkPalette.background,
       appBar: AppBar(
-        title: customText('Sign in',
-            context: context, style: const TextStyle(fontSize: 20)),
-        centerTitle: true,
+        backgroundColor: PhotoTalkPalette.background,
+        foregroundColor: PhotoTalkPalette.textPrimary,
+        elevation: 0,
+        title: Text('Sign in', style: PhotoTalkText.title),
       ),
-      body: _body(context),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Welcome back.', style: PhotoTalkText.h2),
+              const SizedBox(height: 24),
+              _field(
+                label: 'Email',
+                hint: 'you@example.com',
+                controller: _emailController,
+                keyboard: TextInputType.emailAddress,
+              ),
+              _field(
+                label: 'Password',
+                hint: 'Your password',
+                controller: _passwordController,
+                obscure: true,
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/ForgetPasswordPage');
+                  },
+                  child: Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: PhotoTalkPalette.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 58,
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: PhotoTalkPalette.primary,
+                    disabledBackgroundColor:
+                        PhotoTalkPalette.primary.withOpacity(0.5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    textStyle: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Sign in'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    bool obscure = false,
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: PhotoTalkText.chip
+                  .copyWith(color: PhotoTalkPalette.textSecondary)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            obscureText: obscure,
+            keyboardType: keyboard,
+            style: PhotoTalkText.bodyLarge,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: PhotoTalkText.caption.copyWith(fontSize: 15),
+              filled: true,
+              fillColor: PhotoTalkPalette.surface,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: PhotoTalkPalette.divider),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                    color: PhotoTalkPalette.primary, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/follow/followingListPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
@@ -58,8 +59,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
             ListTile(
               onTap: () {
-                Navigator.push(context,
-                    ProfilePage.getRoute(profileId: state.userModel!.userId!));
+                Navigator.push(
+                    context, photoTalk.PhotoTalkProfilePage.getRoute());
               },
               title: Row(
                 children: <Widget>[
@@ -247,9 +248,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   const Divider(),
                   _menuListRowButton('Profile',
                       icon: AppIcon.profile, isEnable: true, onPressed: () {
-                    var state = context.read<AuthState>();
-                    Navigator.push(
-                        context, ProfilePage.getRoute(profileId: state.userId));
+                    Navigator.push(context,
+                        photoTalk.PhotoTalkProfilePage.getRoute());
                   }),
                   _menuListRowButton(
                     'Add a memory',

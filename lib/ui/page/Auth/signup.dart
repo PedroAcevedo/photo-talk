@@ -6,202 +6,228 @@ import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/model/user.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
-import 'package:flutter_twitter_clone/ui/page/Auth/widget/googleLoginButton.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
-import 'package:flutter_twitter_clone/widgets/customFlatButton.dart';
-import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
-import 'package:flutter_twitter_clone/widgets/newWidget/customLoader.dart';
+import 'package:flutter_twitter_clone/ui/page/homePage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:provider/provider.dart';
 
+/// PhotoTalk Create-account form.
+///
+/// Restyled to the calm/warm theme. On success it pushes HomePage and
+/// clears the back stack, so the user lands inside the app immediately
+/// without seeing the welcome page again.
 class Signup extends StatefulWidget {
-  final VoidCallback? loginCallback;
+  const Signup({Key? key}) : super(key: key);
 
-  const Signup({Key? key, this.loginCallback}) : super(key: key);
   @override
-  State<StatefulWidget> createState() => _SignupState();
+  State<Signup> createState() => _SignupState();
 }
 
 class _SignupState extends State<Signup> {
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
-  late TextEditingController _confirmController;
-  late CustomLoader loader;
-  final _formKey = GlobalKey<FormState>();
-
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
-  }
-  @override
-  void initState() {
-    loader = CustomLoader();
-    _nameController = TextEditingController();
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
-    _confirmController = TextEditingController();
-    super.initState();
-  }
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _busy = false;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _nameController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
-  Widget _body(BuildContext context) {
-    return Container(
-      height: context.height - 88,
-      padding: const EdgeInsets.symmetric(horizontal: 30),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            _entryField('Name', controller: _nameController),
-            _entryField('Enter email',
-                controller: _emailController, isEmail: true),
-            _entryField('Enter password',
-                controller: _passwordController, isPassword: true),
-            _entryField('Confirm password',
-                controller: _confirmController, isPassword: true),
-            _submitButton(context),
-            const Divider(height: 30),
-            const SizedBox(height: 30),
-            GoogleLoginButton(
-              loginCallback: widget.loginCallback,
-              loader: loader,
-            ),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
+  bool _isValidEmail(String email) =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
 
-  Widget _entryField(String hint,
-      {required TextEditingController controller,
-      bool isPassword = false,
-      bool isEmail = false}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 15),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
-        style: const TextStyle(
-          fontStyle: FontStyle.normal,
-          fontWeight: FontWeight.normal,
-        ),
-        obscureText: isPassword,
-        decoration: InputDecoration(
-          hintText: hint,
-          border: InputBorder.none,
-          focusedBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(
-              Radius.circular(30.0),
-            ),
-            borderSide: BorderSide(color: Colors.blue),
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-        ),
-      ),
-    );
-  }
-
-  Widget _submitButton(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 35),
-      child: CustomFlatButton(
-        label: "Sign up",
-        onPressed: () => _submitForm(context),
-        borderRadius: 30,
-      ),
-    );
-  }
-
-  void _submitForm(BuildContext context) {
-    if (_nameController.text.isEmpty) {
-      Utility.customSnackBar(context, 'Please enter name');
-      return;
-    }
-    if (_nameController.text.length > 27) {
-      Utility.customSnackBar(context, 'Name length cannot exceed 27 character');
-      return;
-    }
+  Future<void> _submit() async {
+    if (_busy) return;
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
+    final confirm = _confirmController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      Utility.customSnackBar(context, 'Please fill form carefully');
+    if (name.isEmpty) {
+      _toast('Please enter your name');
       return;
-    } else if (!_isValidEmail(email)) {
-      Utility.customSnackBar(context, 'Please enter a valid email address');
+    }
+    if (name.length > 27) {
+      _toast('Name must be 27 characters or less');
       return;
-    } else if (password.length < 6) {
-      Utility.customSnackBar(
-          context, 'Password must be at least 6 characters long');
+    }
+    if (email.isEmpty || !_isValidEmail(email)) {
+      _toast('Please enter a valid email address');
       return;
-    } else if (_passwordController.text != _confirmController.text) {
-      Utility.customSnackBar(
-          context, 'Password and confirm password did not match');
+    }
+    if (password.length < 6) {
+      _toast('Password must be at least 6 characters');
+      return;
+    }
+    if (password != confirm) {
+      _toast('Passwords do not match');
       return;
     }
 
-    loader.showLoader(context);
-    var state = Provider.of<AuthState>(context, listen: false);
-    Random random = Random();
-    int randomNumber = random.nextInt(8);
+    setState(() => _busy = true);
 
-    UserModel user = UserModel(
+    final state = Provider.of<AuthState>(context, listen: false);
+    final random = Random().nextInt(8);
+    final user = UserModel(
       email: email,
       bio: 'Edit profile to update bio',
-      // contact:  _mobileController.text,
-      displayName: _nameController.text,
+      displayName: name,
       dob: DateTime(1950, DateTime.now().month, DateTime.now().day + 3)
           .toString(),
-      location: 'Somewhere in universe',
-      profilePic: Constants.dummyProfilePicList[randomNumber],
+      location: '',
+      profilePic: Constants.dummyProfilePicList[random],
       isVerified: false,
     );
-    state
-        .signUp(
-      user,
-      password: password,
-      context: context,
-    )
-        .then((status) {
-      print(status);
-    }).whenComplete(
-      () {
-        loader.hideLoader();
-        if (state.authStatus == AuthStatus.LOGGED_IN) {
-          Navigator.pop(context);
-          if (widget.loginCallback != null) widget.loginCallback!();
-        }
-      },
-    );
+
+    await state.signUp(user, password: password, context: context);
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    if (state.authStatus == AuthStatus.LOGGED_IN) {
+      // Refresh current-user data so HomePage has a user model immediately.
+      await state.getCurrentUser();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+        (route) => false,
+      );
+    }
+  }
+
+  void _toast(String msg) {
+    Utility.customSnackBar(context, msg);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: PhotoTalkPalette.background,
       appBar: AppBar(
-        title: customText(
-          'Sign Up',
-          context: context,
-          style: const TextStyle(fontSize: 20),
-        ),
-        centerTitle: true,
+        backgroundColor: PhotoTalkPalette.background,
+        foregroundColor: PhotoTalkPalette.textPrimary,
+        elevation: 0,
+        title: Text('Create your account', style: PhotoTalkText.title),
       ),
-      body: SingleChildScrollView(child: _body(context)),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Let's set things up.",
+                style: PhotoTalkText.h2,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'You can change these details any time.',
+                style: PhotoTalkText.caption.copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: 24),
+              _field(
+                label: 'Your name',
+                hint: 'Mary Johnson',
+                controller: _nameController,
+              ),
+              _field(
+                label: 'Email',
+                hint: 'you@example.com',
+                controller: _emailController,
+                keyboard: TextInputType.emailAddress,
+              ),
+              _field(
+                label: 'Password',
+                hint: 'At least 6 characters',
+                controller: _passwordController,
+                obscure: true,
+              ),
+              _field(
+                label: 'Confirm password',
+                hint: 'Type it again',
+                controller: _confirmController,
+                obscure: true,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 58,
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: PhotoTalkPalette.primary,
+                    disabledBackgroundColor:
+                        PhotoTalkPalette.primary.withOpacity(0.5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    textStyle: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Create account'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    bool obscure = false,
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: PhotoTalkText.chip
+                  .copyWith(color: PhotoTalkPalette.textSecondary)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            obscureText: obscure,
+            keyboardType: keyboard,
+            style: PhotoTalkText.bodyLarge,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: PhotoTalkText.caption.copyWith(fontSize: 15),
+              filled: true,
+              fillColor: PhotoTalkPalette.surface,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: PhotoTalkPalette.divider),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                    color: PhotoTalkPalette.primary, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

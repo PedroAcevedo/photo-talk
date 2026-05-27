@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:flutter_twitter_clone/widgets/newWidget/customCheckBox.dart';
-import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
 
 class SettingRowWidget extends StatelessWidget {
   const SettingRowWidget(
@@ -9,9 +8,9 @@ class SettingRowWidget extends StatelessWidget {
     Key? key,
     this.navigateTo,
     this.subtitle,
-    this.textColor = Colors.black,
+    this.textColor = PhotoTalkPalette.textPrimary,
     this.onPressed,
-    this.vPadding = 0,
+    this.vPadding = 4,
     this.showDivider = true,
     this.visibleSwitch,
     this.showCheckBox,
@@ -26,11 +25,13 @@ class SettingRowWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        ListTile(
+    return Container(
+      color: PhotoTalkPalette.surface,
+      child: Column(
+        children: <Widget>[
+          ListTile(
             contentPadding:
-                EdgeInsets.symmetric(vertical: vPadding, horizontal: 18),
+                EdgeInsets.symmetric(vertical: vPadding, horizontal: 20),
             onTap: () {
               if (onPressed != null) {
                 onPressed!();
@@ -43,24 +44,39 @@ class SettingRowWidget extends StatelessWidget {
             },
             title: title == null
                 ? null
-                : UrlText(
-                    text: title ?? '',
-                    style: TextStyle(fontSize: 16, color: textColor),
+                : Text(
+                    title!,
+                    style: PhotoTalkText.body.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
             subtitle: subtitle == null
                 ? null
-                : UrlText(
-                    text: subtitle!,
-                    style: TextStyle(
-                        color: TwitterColor.paleSky,
-                        fontWeight: FontWeight.w400),
+                : Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      subtitle!,
+                      style: PhotoTalkText.caption,
+                    ),
                   ),
-            trailing: CustomCheckBox(
-              isChecked: showCheckBox,
-              visibleSwitch: visibleSwitch,
-            )),
-        !showDivider ? const SizedBox() : const Divider(height: 0)
-      ],
+            trailing: showCheckBox != null || visibleSwitch != null
+                ? CustomCheckBox(
+                    isChecked: showCheckBox,
+                    visibleSwitch: visibleSwitch,
+                  )
+                : const Icon(Icons.chevron_right_rounded,
+                    color: PhotoTalkPalette.textMuted),
+          ),
+          if (showDivider)
+            const Divider(
+              height: 0,
+              indent: 20,
+              endIndent: 20,
+              color: PhotoTalkPalette.divider,
+            ),
+        ],
+      ),
     );
   }
 }

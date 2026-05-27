@@ -1,114 +1,131 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/enum.dart';
-import 'package:flutter_twitter_clone/ui/page/Auth/signup.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
-import 'package:flutter_twitter_clone/widgets/customFlatButton.dart';
-import 'package:flutter_twitter_clone/widgets/newWidget/title_text.dart';
+import 'package:flutter_twitter_clone/ui/page/Auth/signup.dart';
+import 'package:flutter_twitter_clone/ui/page/Auth/signin.dart';
+import 'package:flutter_twitter_clone/ui/page/homePage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:provider/provider.dart';
-import '../homePage.dart';
-import 'signin.dart';
 
-class WelcomePage extends StatefulWidget {
+class WelcomePage extends StatelessWidget {
   const WelcomePage({Key? key}) : super(key: key);
 
   @override
-  _WelcomePageState createState() => _WelcomePageState();
-}
-
-class _WelcomePageState extends State<WelcomePage> {
-  Widget _submitButton() {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 15),
-      width: MediaQuery.of(context).size.width,
-      child: CustomFlatButton(
-        label: "Create Account",
-        onPressed: () {
-          var state = Provider.of<AuthState>(context, listen: false);
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => Signup(loginCallback: state.getCurrentUser),
-            ),
-          );
-        },
-        borderRadius: 30,
-      ),
-    );
-  }
-
-  Widget _body() {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 40,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              width: MediaQuery.of(context).size.width - 80,
-              height: 40,
-              child: Image.asset('assets/images/icon-480.png'),
-            ),
-            const Spacer(),
-            const TitleText(
-              'See what\'s happening in the world right now.',
-              fontSize: 25,
-            ),
-            const SizedBox(
-              height: 20,
-            ),
-            _submitButton(),
-            const Spacer(),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                const TitleText(
-                  'Have an account already?',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w300,
-                ),
-                InkWell(
-                  onTap: () {
-                    var state = Provider.of<AuthState>(context, listen: false);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            SignIn(loginCallback: state.getCurrentUser),
-                      ),
-                    );
-                  },
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 2, vertical: 10),
-                    child: TitleText(
-                      ' Log in',
-                      fontSize: 14,
-                      color: TwitterColor.dodgeBlue,
-                      fontWeight: FontWeight.w300,
-                    ),
-                  ),
-                )
-              ],
-            ),
-            const SizedBox(height: 20)
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    var state = Provider.of<AuthState>(context, listen: false);
+    // Listen so this rebuilds when auth state flips after signup/signin.
+    final state = context.watch<AuthState>();
+    if (state.authStatus == AuthStatus.LOGGED_IN) {
+      return const HomePage();
+    }
+
     return Scaffold(
-      body: state.authStatus == AuthStatus.NOT_LOGGED_IN ||
-              state.authStatus == AuthStatus.NOT_DETERMINED
-          ? _body()
-          : const HomePage(),
+      backgroundColor: PhotoTalkPalette.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(flex: 2),
+              _logo(),
+              const SizedBox(height: 28),
+              Text('Welcome to PhotoTalk',
+                  textAlign: TextAlign.center,
+                  style: PhotoTalkText.h1.copyWith(fontSize: 30)),
+              const SizedBox(height: 12),
+              Text(
+                'A calm place to share family photos, music, and stories together.',
+                textAlign: TextAlign.center,
+                style: PhotoTalkText.body
+                    .copyWith(color: PhotoTalkPalette.textSecondary),
+              ),
+              const Spacer(flex: 3),
+              _primaryButton(
+                context,
+                label: 'Create an account',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const Signup(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _secondaryButton(
+                context,
+                label: 'I already have an account',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SignIn(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _logo() {
+    return Container(
+      width: 120,
+      height: 120,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: PhotoTalkPalette.primary.withOpacity(0.12),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        Icons.photo_library_rounded,
+        size: 64,
+        color: PhotoTalkPalette.primary,
+      ),
+    );
+  }
+
+  Widget _primaryButton(BuildContext context,
+      {required String label, required VoidCallback onPressed}) {
+    return SizedBox(
+      height: 58,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: PhotoTalkPalette.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _secondaryButton(BuildContext context,
+      {required String label, required VoidCallback onPressed}) {
+    return SizedBox(
+      height: 58,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: PhotoTalkPalette.primary,
+          side: const BorderSide(
+              color: PhotoTalkPalette.primary, width: 1.5),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(
+              fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }

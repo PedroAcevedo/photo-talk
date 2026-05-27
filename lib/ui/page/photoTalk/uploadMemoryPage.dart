@@ -59,6 +59,9 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
   }
 
   Future<void> _submit() async {
+    // Dismiss keyboard for clearer feedback.
+    FocusScope.of(context).unfocus();
+
     if (_photo == null && _caption.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -117,9 +120,24 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
         }
       }
       await feedState.createTweet(model);
+
+      // Make sure the feed re-reads from the database so the new memory
+      // appears in 'Today's Memories' immediately on return.
+      feedState.getDataFromDatabase();
+
       if (!mounted) return;
       Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: PhotoTalkPalette.accentGreen,
+          content: Text(
+            'Memory saved. It will appear in Today\'s Memories.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
     } catch (e) {
+      if (!mounted) return;
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Couldn't save memory: $e")),

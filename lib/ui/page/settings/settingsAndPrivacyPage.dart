@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_twitter_clone/model/user.dart';
-import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:flutter_twitter_clone/ui/page/settings/widgets/headerWidget.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
-import 'package:flutter_twitter_clone/widgets/customAppBar.dart';
-import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
-import 'package:provider/provider.dart';
 
 import 'widgets/settingsRowWidget.dart';
 
@@ -14,50 +9,45 @@ class SettingsAndPrivacyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var user = Provider.of<AuthState>(context).userModel ?? UserModel();
     return Scaffold(
-      backgroundColor: TwitterColor.white,
-      appBar: CustomAppBar(
-        isBackButton: true,
-        title: customTitleText(
-          'Settings and privacy',
-        ),
+      backgroundColor: PhotoTalkPalette.background,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: PhotoTalkPalette.background,
+        foregroundColor: PhotoTalkPalette.textPrimary,
+        title: Text('Privacy and access', style: PhotoTalkText.title),
       ),
       body: ListView(
-        children: <Widget>[
-          HeaderWidget(user.userName),
-          const SettingRowWidget(
-            "Account",
+        padding: const EdgeInsets.only(bottom: 32),
+        children: const <Widget>[
+          HeaderWidget('Account'),
+          SettingRowWidget(
+            "Account details",
             navigateTo: 'AccountSettingsPage',
           ),
-          const Divider(height: 0),
-          const SettingRowWidget("Privacy and Policy",
+          SettingRowWidget("Privacy and access",
               navigateTo: 'PrivacyAndSaftyPage'),
-          const SettingRowWidget("Notification",
-              navigateTo: 'NotificationPage'),
-          const SettingRowWidget("Content prefrences",
-              navigateTo: 'ContentPrefrencePage'),
-          const HeaderWidget(
-            'General',
-            secondHeader: true,
-          ),
-          const SettingRowWidget("Display and Sound",
+          SettingRowWidget("Notifications",
+              navigateTo: 'NotificationPage', showDivider: false),
+          HeaderWidget('General', secondHeader: true),
+          SettingRowWidget("Display and sound",
               navigateTo: 'DisplayAndSoundPage'),
-          const SettingRowWidget("Data usage", navigateTo: 'DataUsagePage'),
-          const SettingRowWidget("Accessibility",
+          SettingRowWidget("Data usage", navigateTo: 'DataUsagePage'),
+          SettingRowWidget("Accessibility",
               navigateTo: 'AccessibilityPage'),
-          const SettingRowWidget("Proxy", navigateTo: "ProxyPage"),
-          const SettingRowWidget(
-            "About Fwitter",
+          SettingRowWidget(
+            "About PhotoTalk",
             navigateTo: "AboutPage",
-          ),
-          const SettingRowWidget(
-            null,
             showDivider: false,
-            vPadding: 10,
-            subtitle:
-                'These settings affect all of your Fwitter accounts on this devce.',
-          )
+          ),
+          SizedBox(height: 16),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Text(
+              'These settings affect PhotoTalk on this device.',
+              style: PhotoTalkText.caption,
+            ),
+          ),
         ],
       ),
     );

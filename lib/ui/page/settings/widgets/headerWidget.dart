@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_twitter_clone/ui/theme/theme.dart';
-import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 
 class HeaderWidget extends StatelessWidget {
   final String? title;
@@ -12,16 +11,17 @@ class HeaderWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: secondHeader
-          ? const EdgeInsets.only(left: 18, right: 18, bottom: 10, top: 35)
-          : const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      color: TwitterColor.mystic,
+          ? const EdgeInsets.only(left: 20, right: 20, bottom: 8, top: 28)
+          : const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      color: PhotoTalkPalette.background,
       alignment: Alignment.centerLeft,
-      child: UrlText(
-        text: title ?? '',
-        style: const TextStyle(
-            fontSize: 20,
-            color: AppColor.darkGrey,
-            fontWeight: FontWeight.w700),
+      child: Text(
+        (title ?? '').toUpperCase(),
+        style: PhotoTalkText.chip.copyWith(
+          color: PhotoTalkPalette.textSecondary,
+          fontSize: 13,
+          letterSpacing: 0.8,
+        ),
       ),
     );
   }
