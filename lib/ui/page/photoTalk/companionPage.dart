@@ -1,24 +1,39 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_clone/model/feedModel.dart';
+import 'package:flutter_twitter_clone/services/companion_service.dart';
+import 'package:flutter_twitter_clone/services/snippet_service.dart';
+import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:flutter_twitter_clone/state/feedState.dart';
+import 'package:provider/provider.dart';
 
 import 'photoTalkTheme.dart';
 
 /// AI Companion view - a soft, supportive conversation grounded in a photo.
-/// Follows dementia-supportive conversational principles: no quizzes, no
-/// recall pressure, gentle prompts that focus on feelings and meaning.
+/// Now backed by [CompanionService] (OpenAI gpt-4o-mini) with a deterministic
+/// fallback when OPENAI_API_KEY isn't set.
+///
+/// On close, automatically asks GPT to summarize the conversation as a
+/// Story Snippet (saved to RTDB) and writes a brief SessionLog for the
+/// caregiver recap.
 class CompanionPage extends StatefulWidget {
   const CompanionPage({
     Key? key,
     required this.caption,
     this.imageUrl,
     this.who,
+    this.where,
     this.why,
+    this.song,
+    this.tags = const [],
   }) : super(key: key);
 
   final String caption;
   final String? imageUrl;
   final String? who;
+  final String? where;
   final String? why;
+  final String? song;
+  final List<String> tags;
 
   @override
   State<CompanionPage> createState() => _CompanionPageState();
@@ -29,18 +44,40 @@ class _CompanionPageState extends State<CompanionPage> {
   final ScrollController _scroll = ScrollController();
   final List<_Message> _messages = [];
 
+  final CompanionService _service = CompanionService();
+  final SnippetService _snippets = SnippetService();
+  final SessionLogService _sessionLogs = SessionLogService();
+
+  late final CompanionPhotoContext _photo;
+  late final DateTime _sessionStart;
+  bool _awaitingReply = false;
+  bool _sessionEnded = false;
+
   @override
   void initState() {
     super.initState();
-    _messages.add(_Message.companion(_openingPrompt()));
+    _sessionStart = DateTime.now();
+    _photo = CompanionPhotoContext(
+      caption: widget.caption,
+      who: widget.who,
+      where: widget.where,
+      why: widget.why,
+      song: widget.song,
+      tags: widget.tags,
+      imageUrl: widget.imageUrl,
+    );
+    _bootstrap();
   }
 
-  String _openingPrompt() {
-    if (widget.who != null && widget.who!.isNotEmpty) {
-      return "What a lovely picture. ${widget.who} looks so happy here. "
-          "What do you notice in this moment?";
-    }
-    return "What a lovely picture. There's no rush — what stands out to you here?";
+  Future<void> _bootstrap() async {
+    setState(() => _awaitingReply = true);
+    final opening = await _service.openingPrompt(_photo);
+    if (!mounted) return;
+    setState(() {
+      _messages.add(_Message.companion(opening));
+      _awaitingReply = false;
+    });
+    _scrollToEnd();
   }
 
   static const List<String> _gentlePrompts = [
@@ -50,43 +87,39 @@ class _CompanionPageState extends State<CompanionPage> {
     "Would you like to tell me a little about this?",
   ];
 
-  void _send([String? overrideText]) {
+  Future<void> _send([String? overrideText]) async {
+    if (_awaitingReply) return;
     final text = (overrideText ?? _controller.text).trim();
     if (text.isEmpty) return;
     setState(() {
       _messages.add(_Message.you(text));
       _controller.clear();
+      _awaitingReply = true;
     });
     _scrollToEnd();
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-      setState(() {
-        _messages.add(_Message.companion(_supportiveReply(text)));
-      });
-      _scrollToEnd();
-    });
-  }
 
-  String _supportiveReply(String userText) {
-    // Gentle, validating reply. Not a quiz, not a correction.
-    final lower = userText.toLowerCase();
-    if (lower.contains('happy') ||
-        lower.contains('love') ||
-        lower.contains('glad')) {
-      return "That's such a warm thing to share. It sounds like a moment "
-          "you truly enjoy.";
-    }
-    if (lower.contains('sad') ||
-        lower.contains('miss') ||
-        lower.contains('hard')) {
-      return "I hear you. Those feelings make sense. We can sit with this "
-          "as long as you'd like.";
-    }
-    if (lower.length < 8) {
-      return "Thank you for telling me. Take your time — there's no rush.";
-    }
-    return "That's a beautiful thing to remember. Tell me anything else "
-        "you'd like to share.";
+    final history = _messages
+        .where((m) => !m.isPending)
+        .map((m) => m.fromYou
+            ? CompanionMessage.user(m.text)
+            : CompanionMessage.assistant(m.text))
+        .toList();
+    // The user message we just appended is the last entry; the
+    // service expects history + a separate userMessage, so drop the tail.
+    final priorHistory =
+        history.isNotEmpty ? history.sublist(0, history.length - 1) : history;
+
+    final reply = await _service.respond(
+      photo: _photo,
+      history: priorHistory,
+      userMessage: text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _messages.add(_Message.companion(reply));
+      _awaitingReply = false;
+    });
+    _scrollToEnd();
   }
 
   void _scrollToEnd() {
@@ -101,8 +134,126 @@ class _CompanionPageState extends State<CompanionPage> {
     });
   }
 
+  /// Save a snippet now (explicit "Save snippet" button). Returns null on
+  /// failure; caller decides whether to show a toast.
+  Future<String?> _saveSnippet({bool silent = false}) async {
+    final authState = Provider.of<AuthState>(context, listen: false);
+    final userId = authState.userModel?.userId;
+    if (userId == null) return null;
+
+    final history = _messages
+        .where((m) => !m.isPending)
+        .map((m) => m.fromYou
+            ? CompanionMessage.user(m.text)
+            : CompanionMessage.assistant(m.text))
+        .toList();
+    if (history.isEmpty) return null;
+
+    final summary = await _service.summarizeSnippet(
+      photo: _photo,
+      history: history,
+    );
+
+    // If GPT couldn't summarize (no key, or empty), fall back to the
+    // person's first non-trivial line as the quote.
+    String quote;
+    String? theme;
+    String? tone;
+    if (summary != null) {
+      quote = summary['quote'] ?? '';
+      theme = summary['theme'];
+      tone = summary['tone'];
+    } else {
+      final firstUser = history.firstWhere(
+        (m) => m.role == 'user' && m.content.trim().length >= 3,
+        orElse: () => const CompanionMessage.user(''),
+      );
+      quote = firstUser.content.trim();
+      if (quote.isEmpty) return null;
+    }
+    if (quote.isEmpty) return null;
+
+    final snippet = StorySnippet(
+      quote: quote,
+      theme: theme,
+      tone: tone,
+      photoCaption: widget.caption,
+      photoUrl: widget.imageUrl,
+      person: widget.who,
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+      userId: userId,
+    );
+    final key = await _snippets.save(snippet);
+    if (!silent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: PhotoTalkPalette.accentGreen,
+          content: Text('Saved to your Story Snippets.',
+              style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+    return key;
+  }
+
+  Future<void> _endSession() async {
+    if (_sessionEnded) return;
+    _sessionEnded = true;
+    final authState = Provider.of<AuthState>(context, listen: false);
+    final userId = authState.userModel?.userId;
+    if (userId == null) return;
+
+    final history = _messages
+        .where((m) => !m.isPending)
+        .map((m) => m.fromYou
+            ? CompanionMessage.user(m.text)
+            : CompanionMessage.assistant(m.text))
+        .toList();
+    final userTurnCount =
+        history.where((m) => m.role == 'user').length;
+
+    // Only auto-save a snippet if the person actually engaged.
+    String? tone;
+    if (userTurnCount >= 1) {
+      final summary = await _service.summarizeSnippet(
+        photo: _photo,
+        history: history,
+      );
+      if (summary != null) {
+        tone = summary['tone'];
+        final quote = summary['quote'] ?? '';
+        if (quote.isNotEmpty) {
+          await _snippets.save(StorySnippet(
+            quote: quote,
+            theme: summary['theme'],
+            tone: tone,
+            photoCaption: widget.caption,
+            photoUrl: widget.imageUrl,
+            person: widget.who,
+            createdAt: DateTime.now().toUtc().toIso8601String(),
+            userId: userId,
+          ));
+        }
+      }
+    }
+
+    final duration = DateTime.now().difference(_sessionStart).inSeconds;
+    await _sessionLogs.save(SessionLog(
+      userId: userId,
+      photoCaption: widget.caption,
+      photoUrl: widget.imageUrl,
+      turnCount: userTurnCount,
+      durationSeconds: duration,
+      tone: tone,
+      startedAt: _sessionStart.toUtc().toIso8601String(),
+    ));
+  }
+
   @override
   void dispose() {
+    // Fire-and-forget the session close.
+    // ignore: discarded_futures
+    _endSession();
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
@@ -131,21 +282,56 @@ class _CompanionPageState extends State<CompanionPage> {
             Text('Companion', style: PhotoTalkText.title),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          _photoStrip(),
-          Expanded(
-            child: ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemCount: _messages.length,
-              itemBuilder: (_, i) => _bubble(_messages[i]),
-            ),
+        actions: [
+          TextButton.icon(
+            onPressed: _awaitingReply
+                ? null
+                : () async => await _saveSnippet(),
+            icon: const Icon(Icons.bookmark_add_outlined,
+                color: PhotoTalkPalette.primary),
+            label: const Text('Save snippet',
+                style: TextStyle(
+                  color: PhotoTalkPalette.primary,
+                  fontWeight: FontWeight.w600,
+                )),
           ),
-          _suggestionStrip(),
-          _inputBar(),
+          IconButton(
+            tooltip: "End session gently",
+            onPressed: () async {
+              await _endSession();
+              if (mounted) Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.pause_circle_outline,
+                color: PhotoTalkPalette.textSecondary),
+          ),
         ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            children: [
+              _photoStrip(),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount:
+                      _messages.length + (_awaitingReply ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (i == _messages.length) {
+                      return _bubble(_Message.pending());
+                    }
+                    return _bubble(_messages[i]);
+                  },
+                ),
+              ),
+              _suggestionStrip(),
+              _inputBar(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -166,10 +352,10 @@ class _CompanionPageState extends State<CompanionPage> {
                       child: const Icon(Icons.photo_outlined,
                           color: PhotoTalkPalette.textMuted),
                     )
-                  : CachedNetworkImage(
-                      imageUrl: widget.imageUrl!,
+                  : Image.network(
+                      widget.imageUrl!,
                       fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
+                      errorBuilder: (_, __, ___) => Container(
                         color: PhotoTalkPalette.surface,
                         child: const Icon(Icons.photo_outlined,
                             color: PhotoTalkPalette.textMuted),
@@ -224,12 +410,18 @@ class _CompanionPageState extends State<CompanionPage> {
                 ? null
                 : Border.all(color: PhotoTalkPalette.divider),
           ),
-          child: Text(
-            m.text,
-            style: PhotoTalkText.bodyLarge.copyWith(
-              color: isYou ? Colors.white : PhotoTalkPalette.textPrimary,
-            ),
-          ),
+          child: m.isPending
+              ? const SizedBox(
+                  width: 28,
+                  height: 18,
+                  child: _TypingDots(),
+                )
+              : Text(
+                  m.text,
+                  style: PhotoTalkText.bodyLarge.copyWith(
+                    color: isYou ? Colors.white : PhotoTalkPalette.textPrimary,
+                  ),
+                ),
         ),
       ),
     );
@@ -322,14 +514,71 @@ class _CompanionPageState extends State<CompanionPage> {
   }
 }
 
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        double opacityFor(int i) {
+          final phase = (_ctrl.value + i * 0.33) % 1.0;
+          return phase < 0.5 ? 0.3 + phase : 0.8 - (phase - 0.5);
+        }
+
+        Widget dot(int i) => Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: PhotoTalkPalette.textSecondary
+                    .withOpacity(opacityFor(i).clamp(0.0, 1.0)),
+                shape: BoxShape.circle,
+              ),
+            );
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [dot(0), dot(1), dot(2)],
+        );
+      },
+    );
+  }
+}
+
 class _Message {
   final String text;
   final bool fromYou;
-  _Message.you(this.text) : fromYou = true;
-  _Message.companion(this.text) : fromYou = false;
+  final bool isPending;
+  _Message.you(this.text)
+      : fromYou = true,
+        isPending = false;
+  _Message.companion(this.text)
+      : fromYou = false,
+        isPending = false;
+  _Message.pending()
+      : text = '',
+        fromYou = false,
+        isPending = true;
 }
 
-/// A simple, list-of-recent-conversations entry point for the Companion tab.
+/// Companion tab landing page — uses the user's real memories.
 class CompanionHomePage extends StatelessWidget {
   const CompanionHomePage({Key? key, required this.scaffoldKey})
       : super(key: key);
@@ -338,6 +587,10 @@ class CompanionHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final feedState = context.watch<FeedState>();
+    final authState = context.watch<AuthState>();
+    final list = feedState.getTweetList(authState.userModel) ?? const [];
+
     return Scaffold(
       backgroundColor: PhotoTalkPalette.background,
       appBar: AppBar(
@@ -356,11 +609,14 @@ class CompanionHomePage extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              _hero(context),
+              _hero(context, firstMemory: list.isNotEmpty ? list.first : null),
               const SizedBox(height: 24),
-              Text('Recent conversations', style: PhotoTalkText.h2),
+              Text('Recent memories', style: PhotoTalkText.h2),
               const SizedBox(height: 12),
-              for (final m in kSampleMemories) _recentTile(context, m),
+              if (list.isEmpty)
+                _emptyHint()
+              else
+                for (final m in list) _recentTile(context, m),
             ],
           ),
         ),
@@ -368,7 +624,7 @@ class CompanionHomePage extends StatelessWidget {
     );
   }
 
-  Widget _hero(BuildContext context) {
+  Widget _hero(BuildContext context, {FeedModel? firstMemory}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -400,17 +656,9 @@ class CompanionHomePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () {
-              final m = kSampleMemories.first;
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => CompanionPage(
-                  caption: m.caption,
-                  imageUrl: m.imageUrl,
-                  who: m.who,
-                  why: m.why,
-                ),
-              ));
-            },
+            onPressed: firstMemory == null
+                ? null
+                : () => _openCompanion(context, firstMemory),
             child: const Text("Let's begin",
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           ),
@@ -419,7 +667,27 @@ class CompanionHomePage extends StatelessWidget {
     );
   }
 
-  Widget _recentTile(BuildContext context, SampleMemory m) {
+  Widget _emptyHint() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: PhotoTalkPalette.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: PhotoTalkPalette.divider),
+      ),
+      child: Text(
+        'When family members add memories, you can come here to chat about them with the Companion.',
+        style: PhotoTalkText.body
+            .copyWith(color: PhotoTalkPalette.textSecondary),
+      ),
+    );
+  }
+
+  Widget _recentTile(BuildContext context, FeedModel m) {
+    final caption = (m.description ?? '').trim().isEmpty
+        ? 'A memory worth keeping'
+        : m.description!.split('\n').first;
+    final who = m.user?.displayName;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -437,30 +705,49 @@ class CompanionHomePage extends StatelessWidget {
             child: SizedBox(
               width: 56,
               height: 56,
-              child: m.imageUrl == null
+              child: m.imagePath == null
                   ? Container(color: PhotoTalkPalette.background)
-                  : CachedNetworkImage(
-                      imageUrl: m.imageUrl!,
+                  : Image.network(
+                      m.imagePath!,
                       fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) =>
+                      errorBuilder: (_, __, ___) =>
                           Container(color: PhotoTalkPalette.background),
                     ),
             ),
           ),
-          title: Text(m.caption, style: PhotoTalkText.title),
-          subtitle: Text(m.who, style: PhotoTalkText.caption),
+          title: Text(caption,
+              style: PhotoTalkText.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          subtitle: who == null ? null : Text(who, style: PhotoTalkText.caption),
           trailing: const Icon(Icons.chevron_right,
               color: PhotoTalkPalette.textSecondary),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => CompanionPage(
-              caption: m.caption,
-              imageUrl: m.imageUrl,
-              who: m.who,
-              why: m.why,
-            ),
-          )),
+          onTap: () => _openCompanion(context, m),
         ),
       ),
     );
+  }
+
+  void _openCompanion(BuildContext context, FeedModel m) {
+    final lines = (m.description ?? '').split('\n');
+    final caption = lines.isNotEmpty ? lines.first : 'A memory';
+    String? extract(String prefix) {
+      for (final l in lines.skip(1)) {
+        if (l.startsWith(prefix)) return l.substring(prefix.length).trim();
+      }
+      return null;
+    }
+
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => CompanionPage(
+        caption: caption,
+        imageUrl: m.imagePath,
+        who: extract('Who:'),
+        where: extract('Where:'),
+        why: extract('Why it matters:'),
+        song: extract('Song:'),
+        tags: m.tags ?? const [],
+      ),
+    ));
   }
 }

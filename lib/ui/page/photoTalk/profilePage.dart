@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:provider/provider.dart';
@@ -81,10 +80,10 @@ class PhotoTalkProfilePage extends StatelessWidget {
                       child: const Icon(Icons.person,
                           size: 36, color: PhotoTalkPalette.textMuted),
                     )
-                  : CachedNetworkImage(
-                      imageUrl: photoUrl,
+                  : Image.network(
+                      photoUrl,
                       fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
+                      errorBuilder: (_, __, ___) => Container(
                         color: PhotoTalkPalette.background,
                         alignment: Alignment.center,
                         child: const Icon(Icons.person,

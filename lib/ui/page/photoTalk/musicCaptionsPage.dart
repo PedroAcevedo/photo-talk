@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import 'photoTalkTheme.dart';
@@ -53,10 +52,10 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
                           child: const Icon(Icons.photo_outlined,
                               color: Colors.white70, size: 80),
                         )
-                      : CachedNetworkImage(
-                          imageUrl: widget.imageUrl!,
+                      : Image.network(
+                          widget.imageUrl!,
                           fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
+                          errorBuilder: (_, __, ___) => Container(
                             color: Colors.white24,
                             child: const Icon(Icons.photo_outlined,
                                 color: Colors.white70, size: 80),

@@ -50,6 +50,9 @@ dependencies:
   translator: ^1.0.0
   # link_preview_generator: ^1.2.0
 
+  # PhotoTalk
+  http: ^1.2.2
+
 dev_dependencies:
   test: ^1.17.10
   flutter_test:

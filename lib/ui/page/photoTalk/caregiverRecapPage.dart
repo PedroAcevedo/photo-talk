@@ -1,14 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_clone/services/snippet_service.dart';
+import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:provider/provider.dart';
 
 import 'photoTalkTheme.dart';
 
-/// Caregiver Recap - one-screen overview of the most recent session(s).
-/// Designed to be skimmable in under a minute.
-class CaregiverRecapPage extends StatelessWidget {
+/// Caregiver Recap - one-screen overview of recent Companion sessions
+/// and snippets, read live from Firebase.
+class CaregiverRecapPage extends StatefulWidget {
   const CaregiverRecapPage({Key? key, required this.scaffoldKey})
       : super(key: key);
 
   final GlobalKey<ScaffoldState> scaffoldKey;
+
+  @override
+  State<CaregiverRecapPage> createState() => _CaregiverRecapPageState();
+}
+
+class _CaregiverRecapPageState extends State<CaregiverRecapPage> {
+  final SessionLogService _sessions = SessionLogService();
+  final SnippetService _snippets = SnippetService();
+
+  Future<_RecapData>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    final auth = Provider.of<AuthState>(context, listen: false);
+    final userId = auth.userModel?.userId;
+    if (userId == null) {
+      _future = Future.value(_RecapData.empty());
+    } else {
+      _future = _loadRecap(userId);
+    }
+  }
+
+  Future<_RecapData> _loadRecap(String userId) async {
+    final sessions = await _sessions.recent(userId);
+    final snippets = await _snippets.recent(userId, limit: 6);
+    return _RecapData(sessions: sessions, snippets: snippets);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,82 +55,87 @@ class CaregiverRecapPage extends StatelessWidget {
         foregroundColor: PhotoTalkPalette.textPrimary,
         leading: IconButton(
           icon: const Icon(Icons.menu_rounded, size: 28),
-          onPressed: () => scaffoldKey.currentState?.openDrawer(),
+          onPressed: () => widget.scaffoldKey.currentState?.openDrawer(),
         ),
         title: Text('Caregiver Recap', style: PhotoTalkText.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => setState(_load),
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-            children: [
-              _summaryHeader(),
-          const SizedBox(height: 20),
-          _section(
-            title: 'Engagement',
-            children: [
-              _metricRow(Icons.timer_outlined, 'Session length', '14 min'),
-              _metricRow(Icons.photo_library_outlined, 'Photos viewed', '6'),
-              _metricRow(
-                  Icons.chat_bubble_outline, 'Companion turns', '11'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _section(
-            title: 'Most engaging',
-            children: [
-              _engagingItem(
-                'Lake George, summer 1978',
-                'Spent 5 min · Talked warmly about Mom',
-                tone: 'Joyful',
-                toneColor: PhotoTalkPalette.accentGreen,
-              ),
-              _engagingItem(
-                "Dad's tomatoes",
-                'Spent 3 min · Smiled at the garden',
-                tone: 'Calm',
-                toneColor: PhotoTalkPalette.accentBlue,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _section(
-            title: 'Topics to soften next time',
-            children: [
-              _avoidItem(
-                  'Photos from the 2008 move — felt unsettling.',
-                  PhotoTalkPalette.accentRose),
-              _avoidItem(
-                  'Questions about dates and years — caused pauses.',
-                  PhotoTalkPalette.accentRose),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _section(
-            title: 'Mode that worked best',
-            children: [
-              _modeChipRow(),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _section(
-            title: 'New snippets captured',
-            children: const [
-              _MiniSnippet(
-                  '"Mom always packed lemonade for the lake trips."'),
-              _MiniSnippet(
-                  '"The same Christmas storybook, every year."'),
-            ],
-          ),
-            ],
+          child: FutureBuilder<_RecapData>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final d = snap.data ?? _RecapData.empty();
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                children: [
+                  _summaryHeader(d),
+                  const SizedBox(height: 20),
+                  _section(title: "Today's engagement", children: [
+                    _metricRow(Icons.timer_outlined, 'Total time',
+                        _humanDuration(d.todaySeconds)),
+                    _metricRow(Icons.photo_library_outlined, 'Photos viewed',
+                        '${d.todaySessions.length}'),
+                    _metricRow(Icons.chat_bubble_outline,
+                        'Conversation turns', '${d.todayTurns}'),
+                  ]),
+                  const SizedBox(height: 16),
+                  _section(
+                    title: 'Most engaging',
+                    children: d.topEngaging.isEmpty
+                        ? [_placeholder('No sessions yet today.')]
+                        : d.topEngaging
+                            .map((s) => _engagingItem(
+                                  s.photoCaption.isEmpty
+                                      ? 'A memory'
+                                      : s.photoCaption,
+                                  '${_humanDuration(s.durationSeconds)} · ${s.turnCount} turns',
+                                  tone: s.tone ?? 'Calm',
+                                  toneColor: _toneColor(s.tone),
+                                ))
+                            .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _section(
+                    title: 'New snippets captured',
+                    children: d.snippets.isEmpty
+                        ? [_placeholder('No snippets yet today.')]
+                        : d.snippets
+                            .take(4)
+                            .map((s) => _MiniSnippet('"${s.quote}"'))
+                            .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _section(
+                    title: 'Mode that worked best',
+                    children: const [_ModeChipRowStatic()],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _summaryHeader() {
+  Widget _summaryHeader(_RecapData d) {
+    final hasActivity = d.todaySessions.isNotEmpty;
+    final headline = hasActivity
+        ? "Today's session went well"
+        : 'No sessions yet today';
+    final subtitle = hasActivity
+        ? '${d.todaySessions.length} memor${d.todaySessions.length == 1 ? "y" : "ies"} viewed · ${d.todayTurns} turns'
+        : 'Open Today\'s Memories and tap "Talk about it" to start one.';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -119,13 +159,10 @@ class CaregiverRecapPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Today's session went well",
-                    style: PhotoTalkText.title),
+                Text(headline, style: PhotoTalkText.title),
                 const SizedBox(height: 4),
-                Text(
-                  'Calm and engaged throughout. A few moments of pure joy.',
-                  style: PhotoTalkText.caption.copyWith(fontSize: 15),
-                ),
+                Text(subtitle,
+                    style: PhotoTalkText.caption.copyWith(fontSize: 15)),
               ],
             ),
           ),
@@ -150,6 +187,15 @@ class CaregiverRecapPage extends StatelessWidget {
           ...children,
         ],
       ),
+    );
+  }
+
+  Widget _placeholder(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Text(text,
+          style: PhotoTalkText.body
+              .copyWith(color: PhotoTalkPalette.textSecondary)),
     );
   }
 
@@ -203,50 +249,64 @@ class CaregiverRecapPage extends StatelessWidget {
     );
   }
 
-  Widget _avoidItem(String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+  Color _toneColor(String? tone) {
+    switch ((tone ?? '').toLowerCase()) {
+      case 'joyful':
+        return PhotoTalkPalette.primary;
+      case 'calm':
+        return PhotoTalkPalette.accentGreen;
+      case 'reflective':
+        return PhotoTalkPalette.accentBlue;
+      case 'tender':
+        return PhotoTalkPalette.accentLavender;
+      case 'mixed':
+        return PhotoTalkPalette.accentRose;
+      default:
+        return PhotoTalkPalette.accentGreen;
+    }
+  }
+
+  String _humanDuration(int seconds) {
+    if (seconds < 60) return '${seconds}s';
+    final m = seconds ~/ 60;
+    return '${m} min';
+  }
+}
+
+class _ModeChipRowStatic extends StatelessWidget {
+  const _ModeChipRowStatic();
+
+  Widget _chip(String label, IconData icon, Color color, bool selected) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? color : PhotoTalkPalette.background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.info_outline, color: color),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: PhotoTalkText.body)),
+          Icon(icon, size: 16, color: selected ? Colors.white : color),
+          const SizedBox(width: 6),
+          Text(label,
+              style: TextStyle(
+                color: selected ? Colors.white : color,
+                fontWeight: FontWeight.w600,
+              )),
         ],
       ),
     );
   }
 
-  Widget _modeChipRow() {
-    Widget chip(String label, IconData icon, Color color, bool selected) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? color : PhotoTalkPalette.background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: selected ? Colors.white : color),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                  color: selected ? Colors.white : color,
-                  fontWeight: FontWeight.w600,
-                )),
-          ],
-        ),
-      );
-    }
-
+  @override
+  Widget build(BuildContext context) {
     return Wrap(spacing: 8, runSpacing: 8, children: [
-      chip('Calm Mode', Icons.spa_outlined, PhotoTalkPalette.accentGreen,
+      _chip('Calm Mode', Icons.spa_outlined, PhotoTalkPalette.accentGreen,
           true),
-      chip('Chat Mode', Icons.chat_bubble_outline,
+      _chip('Chat Mode', Icons.chat_bubble_outline,
           PhotoTalkPalette.primary, false),
-      chip('Music + Captions', Icons.music_note_rounded,
+      _chip('Music + Captions', Icons.music_note_rounded,
           PhotoTalkPalette.accentBlue, false),
     ]);
   }
@@ -273,5 +333,41 @@ class _MiniSnippet extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _RecapData {
+  final List<SessionLog> sessions;
+  final List<StorySnippet> snippets;
+
+  _RecapData({required this.sessions, required this.snippets});
+
+  factory _RecapData.empty() => _RecapData(sessions: [], snippets: []);
+
+  List<SessionLog> get todaySessions {
+    final today = DateTime.now().toLocal();
+    return sessions.where((s) {
+      try {
+        final d = DateTime.parse(s.startedAt).toLocal();
+        return d.year == today.year &&
+            d.month == today.month &&
+            d.day == today.day;
+      } catch (_) {
+        return false;
+      }
+    }).toList();
+  }
+
+  int get todaySeconds =>
+      todaySessions.fold<int>(0, (acc, s) => acc + s.durationSeconds);
+
+  int get todayTurns =>
+      todaySessions.fold<int>(0, (acc, s) => acc + s.turnCount);
+
+  /// Top sessions today by turn count (proxy for engagement).
+  List<SessionLog> get topEngaging {
+    final list = [...todaySessions];
+    list.sort((a, b) => b.turnCount.compareTo(a.turnCount));
+    return list.take(3).toList();
   }
 }

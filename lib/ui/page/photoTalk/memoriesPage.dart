@@ -115,11 +115,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
                     tooltip: 'Calm Mode',
                     icon: const Icon(Icons.spa_outlined,
                         color: PhotoTalkPalette.accentGreen, size: 28),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CalmModePage(),
-                      ),
-                    ),
+                    onPressed: () => _openCalmMode(context),
                   ),
                 ],
               ),
@@ -315,61 +311,95 @@ class _MemoriesPageState extends State<MemoriesPage> {
     );
   }
 
-  Widget _cardFromFeed(BuildContext context, FeedModel model) {
-    final caption = (model.description ?? '').trim().isEmpty
-        ? 'A memory worth keeping'
-        : model.description!;
-    final tags = model.tags ?? const <String>[];
-    final who = model.user?.displayName;
-    return MemoryCard(
+  /// Parse the FeedModel.description (which carries our composed
+  /// caption + Who/Where/Why/Song lines from the upload form).
+  _Parsed _parse(FeedModel model) {
+    final desc = (model.description ?? '').trim();
+    if (desc.isEmpty) {
+      return const _Parsed(caption: 'A memory worth keeping');
+    }
+    final lines = desc.split('\n');
+    final caption = lines.first;
+    String? extract(String prefix) {
+      for (final l in lines.skip(1)) {
+        if (l.startsWith(prefix)) {
+          return l.substring(prefix.length).trim();
+        }
+      }
+      return null;
+    }
+
+    return _Parsed(
       caption: caption,
-      who: who,
-      where: null,
-      why: null,
-      imageUrl: model.imagePath,
-      tags: tags,
-      onTalk: () => _openCompanion(
-        context,
-        caption: caption,
-        imageUrl: model.imagePath,
-      ),
-      onPlayMusic: () => _openMusic(
-        context,
-        caption: caption,
-        imageUrl: model.imagePath,
-      ),
+      who: extract('Who:'),
+      where: extract('Where:'),
+      why: extract('Why it matters:'),
+      song: extract('Song:'),
     );
   }
 
-  void _openCompanion(
-    BuildContext context, {
-    required String caption,
-    String? imageUrl,
-    String? who,
-    String? why,
-  }) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => CompanionPage(
-        caption: caption,
-        imageUrl: imageUrl,
-        who: who,
-        why: why,
-      ),
-    ));
+  Widget _cardFromFeed(BuildContext context, FeedModel model) {
+    final p = _parse(model);
+    final tags = model.tags ?? const <String>[];
+    final fallbackWho = model.user?.displayName;
+    return MemoryCard(
+      caption: p.caption,
+      who: p.who ?? fallbackWho,
+      where: p.where,
+      why: p.why,
+      song: p.song,
+      imageUrl: model.imagePath,
+      tags: tags,
+      onTalk: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CompanionPage(
+          caption: p.caption,
+          imageUrl: model.imagePath,
+          who: p.who ?? fallbackWho,
+          where: p.where,
+          why: p.why,
+          song: p.song,
+          tags: tags,
+        ),
+      )),
+      onPlayMusic: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => MusicCaptionsPage(
+          caption: p.caption,
+          imageUrl: model.imagePath,
+          song: p.song,
+        ),
+      )),
+    );
   }
 
-  void _openMusic(
-    BuildContext context, {
-    required String caption,
-    String? imageUrl,
-    String? song,
-  }) {
+  void _openCalmMode(BuildContext context) {
+    final feedState = Provider.of<FeedState>(context, listen: false);
+    final authState = Provider.of<AuthState>(context, listen: false);
+    final list = feedState.getTweetList(authState.userModel) ?? const [];
+    final slides = list.map((m) {
+      final p = _parse(m);
+      return CalmSlide(
+        caption: p.caption,
+        subtitle: p.where ?? p.who ?? m.user?.displayName,
+        imageUrl: m.imagePath,
+      );
+    }).toList();
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => MusicCaptionsPage(
-        caption: caption,
-        imageUrl: imageUrl,
-        song: song,
-      ),
+      builder: (_) => CalmModePage(slides: slides),
     ));
   }
+}
+
+class _Parsed {
+  final String caption;
+  final String? who;
+  final String? where;
+  final String? why;
+  final String? song;
+  const _Parsed({
+    required this.caption,
+    this.who,
+    this.where,
+    this.why,
+    this.song,
+  });
 }
