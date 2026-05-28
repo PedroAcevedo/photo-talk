@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/services/companion_service.dart';
@@ -134,12 +135,21 @@ class _CompanionPageState extends State<CompanionPage> {
     });
   }
 
-  /// Save a snippet now (explicit "Save snippet" button). Returns null on
-  /// failure; caller decides whether to show a toast.
+  /// Save a snippet now (explicit "Save snippet" button).
+  ///
+  /// Every failure mode reports back via a SnackBar so the user can see
+  /// what's wrong instead of the button silently doing nothing.
   Future<String?> _saveSnippet({bool silent = false}) async {
     final authState = Provider.of<AuthState>(context, listen: false);
-    final userId = authState.userModel?.userId;
-    if (userId == null) return null;
+    final userId =
+        authState.userModel?.userId ?? authState.user?.uid;
+    if (userId == null) {
+      _toast(
+        "You need to be signed in to save a snippet.",
+        error: true,
+      );
+      return null;
+    }
 
     final history = _messages
         .where((m) => !m.isPending)
@@ -147,31 +157,46 @@ class _CompanionPageState extends State<CompanionPage> {
             ? CompanionMessage.user(m.text)
             : CompanionMessage.assistant(m.text))
         .toList();
-    if (history.isEmpty) return null;
 
-    final summary = await _service.summarizeSnippet(
-      photo: _photo,
-      history: history,
-    );
+    final userTurns =
+        history.where((m) => m.role == 'user').toList();
+    if (userTurns.isEmpty) {
+      _toast(
+        "There's nothing to save yet — share a thought first.",
+        error: true,
+      );
+      return null;
+    }
 
-    // If GPT couldn't summarize (no key, or empty), fall back to the
-    // person's first non-trivial line as the quote.
-    String quote;
+    // Try GPT summary first; if it returns nothing usable, fall back to
+    // the person's first meaningful line.
+    String quote = '';
     String? theme;
     String? tone;
-    if (summary != null) {
-      quote = summary['quote'] ?? '';
-      theme = summary['theme'];
-      tone = summary['tone'];
-    } else {
-      final firstUser = history.firstWhere(
-        (m) => m.role == 'user' && m.content.trim().length >= 3,
-        orElse: () => const CompanionMessage.user(''),
+    try {
+      final summary = await _service.summarizeSnippet(
+        photo: _photo,
+        history: history,
       );
-      quote = firstUser.content.trim();
-      if (quote.isEmpty) return null;
+      if (summary != null) {
+        quote = (summary['quote'] ?? '').toString().trim();
+        theme = summary['theme'];
+        tone = summary['tone'];
+      }
+    } catch (_) {
+      // Ignore summary errors — we'll use the fallback.
     }
-    if (quote.isEmpty) return null;
+
+    if (quote.isEmpty) {
+      quote = userTurns.first.content.trim();
+    }
+    if (quote.isEmpty) {
+      _toast(
+        "Couldn't build a snippet from this conversation.",
+        error: true,
+      );
+      return null;
+    }
 
     final snippet = StorySnippet(
       quote: quote,
@@ -183,24 +208,44 @@ class _CompanionPageState extends State<CompanionPage> {
       createdAt: DateTime.now().toUtc().toIso8601String(),
       userId: userId,
     );
-    final key = await _snippets.save(snippet);
-    if (!silent && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: PhotoTalkPalette.accentGreen,
-          content: Text('Saved to your Story Snippets.',
-              style: TextStyle(color: Colors.white)),
-        ),
+
+    try {
+      final key = await _snippets.save(snippet);
+      if (!silent && mounted) {
+        _toast('Saved to your Story Snippets.', error: false);
+      }
+      return key;
+    } on FirebaseException catch (e) {
+      _toast(
+        'Firebase ${e.plugin} error: ${e.code}\n${e.message ?? ''}',
+        error: true,
       );
+      return null;
+    } catch (e) {
+      _toast("Couldn't save snippet: $e", error: true);
+      return null;
     }
-    return key;
+  }
+
+  void _toast(String message, {required bool error}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: error
+            ? PhotoTalkPalette.accentRose
+            : PhotoTalkPalette.accentGreen,
+        duration: Duration(seconds: error ? 8 : 3),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+      ),
+    );
   }
 
   Future<void> _endSession() async {
     if (_sessionEnded) return;
     _sessionEnded = true;
     final authState = Provider.of<AuthState>(context, listen: false);
-    final userId = authState.userModel?.userId;
+    final userId =
+        authState.userModel?.userId ?? authState.user?.uid;
     if (userId == null) return;
 
     final history = _messages
@@ -212,20 +257,32 @@ class _CompanionPageState extends State<CompanionPage> {
     final userTurnCount =
         history.where((m) => m.role == 'user').length;
 
-    // Only auto-save a snippet if the person actually engaged.
+    // Auto-save snippet if the person engaged. Catches independently so
+    // a snippet failure doesn't prevent the session log from being written.
     String? tone;
     if (userTurnCount >= 1) {
-      final summary = await _service.summarizeSnippet(
-        photo: _photo,
-        history: history,
-      );
-      if (summary != null) {
-        tone = summary['tone'];
-        final quote = summary['quote'] ?? '';
+      try {
+        final summary = await _service.summarizeSnippet(
+          photo: _photo,
+          history: history,
+        );
+        String quote = '';
+        if (summary != null) {
+          tone = summary['tone'];
+          quote = (summary['quote'] ?? '').toString().trim();
+        }
+        if (quote.isEmpty) {
+          // Fallback: use the user's first meaningful turn.
+          final firstUser = history.firstWhere(
+            (m) => m.role == 'user' && m.content.trim().length >= 3,
+            orElse: () => const CompanionMessage.user(''),
+          );
+          quote = firstUser.content.trim();
+        }
         if (quote.isNotEmpty) {
           await _snippets.save(StorySnippet(
             quote: quote,
-            theme: summary['theme'],
+            theme: summary?['theme'],
             tone: tone,
             photoCaption: widget.caption,
             photoUrl: widget.imageUrl,
@@ -234,19 +291,26 @@ class _CompanionPageState extends State<CompanionPage> {
             userId: userId,
           ));
         }
+      } catch (e) {
+        // Auto-save is best-effort; don't surface to the user on dispose.
+        // The explicit Save snippet button is the audited path.
       }
     }
 
-    final duration = DateTime.now().difference(_sessionStart).inSeconds;
-    await _sessionLogs.save(SessionLog(
-      userId: userId,
-      photoCaption: widget.caption,
-      photoUrl: widget.imageUrl,
-      turnCount: userTurnCount,
-      durationSeconds: duration,
-      tone: tone,
-      startedAt: _sessionStart.toUtc().toIso8601String(),
-    ));
+    try {
+      final duration = DateTime.now().difference(_sessionStart).inSeconds;
+      await _sessionLogs.save(SessionLog(
+        userId: userId,
+        photoCaption: widget.caption,
+        photoUrl: widget.imageUrl,
+        turnCount: userTurnCount,
+        durationSeconds: duration,
+        tone: tone,
+        startedAt: _sessionStart.toUtc().toIso8601String(),
+      ));
+    } catch (_) {
+      // Same: best-effort on dispose.
+    }
   }
 
   @override
