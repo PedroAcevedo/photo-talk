@@ -74,8 +74,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: PhotoTalkPalette.primary,
         foregroundColor: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushNamed('/UploadMemoryPage'),
+        onPressed: () => Navigator.of(context).pushNamed('/UploadMemoryPage'),
         icon: const Icon(Icons.add_a_photo_outlined),
         label: const Text(
           'Add a memory',
@@ -99,7 +98,8 @@ class _MemoriesPageState extends State<MemoriesPage> {
                 leading: IconButton(
                   icon: const Icon(Icons.menu_rounded,
                       color: PhotoTalkPalette.textPrimary, size: 28),
-                  onPressed: () => widget.scaffoldKey.currentState?.openDrawer(),
+                  onPressed: () =>
+                      widget.scaffoldKey.currentState?.openDrawer(),
                 ),
                 title: Row(
                   children: [
@@ -157,7 +157,9 @@ class _MemoriesPageState extends State<MemoriesPage> {
     return Consumer<FeedState>(
       builder: (context, state, _) {
         final authState = Provider.of<AuthState>(context, listen: false);
-        final List<FeedModel>? list = state.getTweetList(authState.userModel);
+        final List<FeedModel>? list = authState.userModel == null
+            ? state.feedList
+            : state.getTweetList(authState.userModel);
 
         // Real feed data wins immediately and clears any timeout banner.
         if (list != null && list.isNotEmpty) {
@@ -194,8 +196,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
     );
   }
 
-  Widget _emptyState(BuildContext context,
-      {bool showOfflineBanner = false}) {
+  Widget _emptyState(BuildContext context, {bool showOfflineBanner = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       child: Column(
@@ -205,7 +206,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: PhotoTalkPalette.primary.withOpacity(0.12),
+              color: PhotoTalkPalette.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -232,13 +233,12 @@ class _MemoriesPageState extends State<MemoriesPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: PhotoTalkPalette.primary,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              textStyle: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700),
+              textStyle:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
           if (showOfflineBanner) ...[
@@ -256,10 +256,10 @@ class _MemoriesPageState extends State<MemoriesPage> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: PhotoTalkPalette.accentRose.withOpacity(0.10),
+          color: PhotoTalkPalette.accentRose.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: PhotoTalkPalette.accentRose.withOpacity(0.4)),
+              color: PhotoTalkPalette.accentRose.withValues(alpha: 0.4)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

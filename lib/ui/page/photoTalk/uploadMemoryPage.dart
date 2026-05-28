@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +27,8 @@ class UploadMemoryPage extends StatefulWidget {
 }
 
 class _UploadMemoryPageState extends State<UploadMemoryPage> {
-  File? _photo;
+  XFile? _photo;
+  Uint8List? _photoBytes;
   final _caption = TextEditingController();
   final _who = TextEditingController();
   final _where = TextEditingController();
@@ -55,7 +55,11 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
         imageQuality: 85,
       );
       if (picked != null) {
-        setState(() => _photo = File(picked.path));
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _photo = picked;
+          _photoBytes = bytes;
+        });
       }
     } catch (e) {
       Utility.customSnackBar(context, "Couldn't open photo: $e");
@@ -78,24 +82,23 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     final feedState = Provider.of<FeedState>(context, listen: false);
     final authState = Provider.of<AuthState>(context, listen: false);
     final myUser = authState.userModel;
-
-    if (myUser == null) {
-      // Demo path: just close. In production we'd require sign-in.
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Memory saved (demo).')),
-      );
-      return;
-    }
+    final firebaseUser = authState.user;
+    final fallbackName = firebaseUser?.displayName?.trim().isNotEmpty == true
+        ? firebaseUser!.displayName!.trim()
+        : firebaseUser?.email?.split('@').first ?? 'PhotoTalk Friend';
+    final fallbackUserName =
+        fallbackName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final userId = myUser?.userId ?? firebaseUser?.uid ?? 'phototalk-demo-user';
 
     final user = UserModel(
-      displayName: myUser.displayName ?? myUser.email!.split('@')[0],
-      profilePic: myUser.profilePic ?? Constants.dummyProfilePic,
-      userId: myUser.userId,
-      isVerified: myUser.isVerified,
-      userName: myUser.userName,
+      displayName: myUser?.displayName ?? fallbackName,
+      email: myUser?.email ?? firebaseUser?.email,
+      profilePic: myUser?.profilePic ??
+          firebaseUser?.photoURL ??
+          Constants.dummyProfilePic,
+      userId: userId,
+      isVerified: myUser?.isVerified ?? firebaseUser?.emailVerified ?? false,
+      userName: myUser?.userName ?? fallbackUserName,
     );
 
     // Compose the caption + context into the FeedModel.description so we
@@ -112,7 +115,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       description: composedDescription,
       user: user,
       createdAt: DateTime.now().toUtc().toString(),
-      userId: myUser.userId!,
+      userId: userId,
       tags: const ['memory'],
     );
 
@@ -178,12 +181,12 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
   /// propagates up to the UI instead of being silently swallowed.
   Future<void> _writeDirectly(FeedModel model) async {
     if (_photo != null) {
-      final filename = DateTime.now().toIso8601String().replaceAll(':', '-') +
-          '_' +
-          _photo!.path.split(Platform.pathSeparator).last;
+      final safeName = _photo!.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final filename =
+          '${DateTime.now().toIso8601String().replaceAll(':', '-')}_$safeName';
       final ref =
           FirebaseStorage.instance.ref().child('tweetImage').child(filename);
-      await ref.putFile(_photo!);
+      await ref.putData(_photoBytes ?? await _photo!.readAsBytes());
       model.imagePath = await ref.getDownloadURL();
     }
 
@@ -288,10 +291,12 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
             color: PhotoTalkPalette.surface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-                color: PhotoTalkPalette.divider,
-                width: _photo == null ? 2 : 0),
+                color: PhotoTalkPalette.divider, width: _photo == null ? 2 : 0),
             image: _photo != null
-                ? DecorationImage(image: FileImage(_photo!), fit: BoxFit.cover)
+                ? DecorationImage(
+                    image: MemoryImage(_photoBytes!),
+                    fit: BoxFit.cover,
+                  )
                 : null,
           ),
           child: _photo != null
@@ -305,7 +310,10 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: () => setState(() => _photo = null),
+                          onTap: () => setState(() {
+                            _photo = null;
+                            _photoBytes = null;
+                          }),
                           child: const Padding(
                             padding: EdgeInsets.all(8),
                             child: Icon(Icons.close,
@@ -348,8 +356,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined,
                     color: PhotoTalkPalette.primary),
-                title:
-                    Text('Take a photo', style: PhotoTalkText.bodyLarge),
+                title: Text('Take a photo', style: PhotoTalkText.bodyLarge),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickPhoto(source: ImageSource.camera);
@@ -358,8 +365,8 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined,
                     color: PhotoTalkPalette.primary),
-                title: Text('Choose from gallery',
-                    style: PhotoTalkText.bodyLarge),
+                title:
+                    Text('Choose from gallery', style: PhotoTalkText.bodyLarge),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickPhoto(source: ImageSource.gallery);
@@ -387,8 +394,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
         children: [
           Row(children: [
             if (icon != null) ...[
-              Icon(icon,
-                  size: 18, color: PhotoTalkPalette.textSecondary),
+              Icon(icon, size: 18, color: PhotoTalkPalette.textSecondary),
               const SizedBox(width: 6),
             ],
             Text(label,
@@ -405,16 +411,16 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
               hintStyle: PhotoTalkText.caption.copyWith(fontSize: 15),
               filled: true,
               fillColor: PhotoTalkPalette.surface,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 14),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: PhotoTalkPalette.divider),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                    color: PhotoTalkPalette.primary, width: 2),
+                borderSide:
+                    const BorderSide(color: PhotoTalkPalette.primary, width: 2),
               ),
             ),
           ),
@@ -427,10 +433,10 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: PhotoTalkPalette.accentBlue.withOpacity(0.08),
+        color: PhotoTalkPalette.accentBlue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: PhotoTalkPalette.accentBlue.withOpacity(0.3)),
+        border: Border.all(
+            color: PhotoTalkPalette.accentBlue.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
