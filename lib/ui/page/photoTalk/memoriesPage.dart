@@ -123,12 +123,25 @@ class _MemoriesPageState extends State<MemoriesPage> {
                   ),
                 ],
               ),
-              SliverToBoxAdapter(child: _header(context)),
+              SliverToBoxAdapter(child: _centered(_header(context))),
               _memoriesList(context),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// On tablets and wide windows we cap the content width and center it
+  /// so cards don't stretch to giant edge-to-edge. Phones keep full width.
+  static const double _maxContentWidth = 680;
+
+  Widget _centered(Widget child) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+        child: child,
       ),
     );
   }
@@ -170,7 +183,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
           }
           return SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, i) => _cardFromFeed(context, list[i]),
+              (context, i) => _centered(_cardFromFeed(context, list[i])),
               childCount: list.length,
             ),
           );
@@ -190,7 +203,9 @@ class _MemoriesPageState extends State<MemoriesPage> {
         // small banner so the user understands the database isn't reachable.
         return SliverFillRemaining(
           hasScrollBody: false,
-          child: _emptyState(context, showOfflineBanner: state.isBusy),
+          child: _centered(
+            _emptyState(context, showOfflineBanner: state.isBusy),
+          ),
         );
       },
     );

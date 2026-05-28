@@ -350,16 +350,20 @@ class CompanionHomePage extends StatelessWidget {
         ),
         title: Text('Companion', style: PhotoTalkText.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _hero(context),
-          const SizedBox(height: 24),
-          Text('Recent conversations', style: PhotoTalkText.h2),
-          const SizedBox(height: 12),
-          for (final m in kSampleMemories)
-            _recentTile(context, m),
-        ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _hero(context),
+              const SizedBox(height: 24),
+              Text('Recent conversations', style: PhotoTalkText.h2),
+              const SizedBox(height: 12),
+              for (final m in kSampleMemories) _recentTile(context, m),
+            ],
+          ),
+        ),
       ),
     );
   }

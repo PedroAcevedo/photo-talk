@@ -53,10 +53,15 @@ class _BookmarkBody extends StatelessWidget {
     if (list == null || list.isEmpty) {
       return _emptyState(context);
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: list.length,
-      itemBuilder: (_, i) => _cardFor(context, list[i]),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: list.length,
+          itemBuilder: (_, i) => _cardFor(context, list[i]),
+        ),
+      ),
     );
   }
 

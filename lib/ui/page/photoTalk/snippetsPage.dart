@@ -24,10 +24,13 @@ class SnippetsPage extends StatelessWidget {
         ),
         title: Text('Story Snippets', style: PhotoTalkText.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          Text('Themes', style: PhotoTalkText.h2),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              Text('Themes', style: PhotoTalkText.h2),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -64,9 +67,11 @@ class SnippetsPage extends StatelessWidget {
             theme: 'Celebration · Comfort',
             date: '3 days ago',
           ),
-          const SizedBox(height: 24),
-          _familyStorylineCard(context),
-        ],
+              const SizedBox(height: 24),
+              _familyStorylineCard(context),
+            ],
+          ),
+        ),
       ),
     );
   }

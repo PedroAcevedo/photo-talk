@@ -24,10 +24,13 @@ class CaregiverRecapPage extends StatelessWidget {
         ),
         title: Text('Caregiver Recap', style: PhotoTalkText.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          _summaryHeader(),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              _summaryHeader(),
           const SizedBox(height: 20),
           _section(
             title: 'Engagement',
@@ -85,7 +88,9 @@ class CaregiverRecapPage extends StatelessWidget {
                   '"The same Christmas storybook, every year."'),
             ],
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -97,7 +97,8 @@ class MemoryCard extends StatelessWidget {
       return ClipRRect(
         borderRadius: radius,
         child: Container(
-          height: 260,
+          height: 220,
+          width: double.infinity,
           color: PhotoTalkPalette.background,
           child: const Center(
             child: Icon(Icons.photo_outlined,
@@ -108,8 +109,11 @@ class MemoryCard extends StatelessWidget {
     }
     return ClipRRect(
       borderRadius: radius,
-      child: AspectRatio(
-        aspectRatio: 4 / 3,
+      child: SizedBox(
+        // Cap the photo height so the card never grows taller than ~320px
+        // of image on phones and tablets. Keeps caption + actions in view.
+        height: 320,
+        width: double.infinity,
         child: Image.network(
           imageUrl!,
           fit: BoxFit.cover,

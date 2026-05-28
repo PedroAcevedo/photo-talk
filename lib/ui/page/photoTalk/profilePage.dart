@@ -31,26 +31,31 @@ class PhotoTalkProfilePage extends StatelessWidget {
         foregroundColor: PhotoTalkPalette.textPrimary,
         title: Text('Profile', style: PhotoTalkText.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          _header(user?.displayName, user?.email, user?.profilePic),
-          const SizedBox(height: 24),
-          _section(title: 'Your details', rows: [
-            _row(Icons.person_outline, 'Name',
-                user?.displayName ?? 'Not set'),
-            _row(Icons.mail_outline, 'Email', user?.email ?? 'Not set'),
-            _row(Icons.badge_outlined, 'Role', 'Family member'),
-          ]),
-          const SizedBox(height: 16),
-          _section(title: 'Preferences', rows: [
-            _row(Icons.spa_outlined, 'Default mode', 'Calm Mode'),
-            _row(Icons.text_fields, 'Text size', 'Large'),
-            _row(Icons.notifications_none, 'Daily reminder', 'Off'),
-          ]),
-          const SizedBox(height: 24),
-          _logoutButton(context),
-        ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              _header(user?.displayName, user?.email, user?.profilePic),
+              const SizedBox(height: 24),
+              _section(title: 'Your details', rows: [
+                _row(Icons.person_outline, 'Name',
+                    user?.displayName ?? 'Not set'),
+                _row(Icons.mail_outline, 'Email', user?.email ?? 'Not set'),
+                _row(Icons.badge_outlined, 'Role', 'Family member'),
+              ]),
+              const SizedBox(height: 16),
+              _section(title: 'Preferences', rows: [
+                _row(Icons.spa_outlined, 'Default mode', 'Calm Mode'),
+                _row(Icons.text_fields, 'Text size', 'Large'),
+                _row(Icons.notifications_none, 'Daily reminder', 'Off'),
+              ]),
+              const SizedBox(height: 24),
+              _logoutButton(context),
+            ],
+          ),
+        ),
       ),
     );
   }
