@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../photoTalkTheme.dart';
@@ -111,23 +110,80 @@ class MemoryCard extends StatelessWidget {
       borderRadius: radius,
       child: AspectRatio(
         aspectRatio: 4 / 3,
-        child: CachedNetworkImage(
-          imageUrl: imageUrl!,
+        child: Image.network(
+          imageUrl!,
           fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
-            color: PhotoTalkPalette.background,
-            alignment: Alignment.center,
-            child: const CircularProgressIndicator(strokeWidth: 2),
-          ),
-          errorWidget: (_, __, ___) => Container(
-            color: PhotoTalkPalette.background,
-            alignment: Alignment.center,
-            child: const Icon(Icons.photo_outlined,
-                size: 64, color: PhotoTalkPalette.textMuted),
-          ),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              color: PhotoTalkPalette.background,
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+          errorBuilder: (context, error, stack) {
+            // Reveal the underlying failure so it's diagnosable from the UI.
+            final detail = _summarizeImageError(error);
+            return Container(
+              color: PhotoTalkPalette.background,
+              padding: const EdgeInsets.all(16),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.image_not_supported_outlined,
+                      size: 48, color: PhotoTalkPalette.accentRose),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Image could not load',
+                    textAlign: TextAlign.center,
+                    style: PhotoTalkText.body
+                        .copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  if (detail != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      detail,
+                      textAlign: TextAlign.center,
+                      style: PhotoTalkText.caption.copyWith(fontSize: 12),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  String? _summarizeImageError(Object error) {
+    final s = error.toString();
+    // Flutter formats HttpException as "HttpException: ...statusCode: 403..."
+    final codeMatch = RegExp(r'statusCode:\s*(\d+)').firstMatch(s);
+    if (codeMatch != null) {
+      final code = codeMatch.group(1);
+      switch (code) {
+        case '403':
+          return 'HTTP 403 — Storage rules deny read access.';
+        case '404':
+          return 'HTTP 404 — file not found in Storage.';
+        case '401':
+          return 'HTTP 401 — not authenticated for this Storage object.';
+        default:
+          return 'HTTP $code while fetching the image.';
+      }
+    }
+    if (s.contains('Failed host lookup') || s.contains('SocketException')) {
+      return 'Network unreachable.';
+    }
+    if (s.contains('XMLHttpRequest') || s.contains('CORS')) {
+      return 'Blocked by browser (likely a CORS rule on the Storage bucket).';
+    }
+    // Trim very long messages so the card stays readable.
+    return s.length > 120 ? '${s.substring(0, 117)}…' : s;
   }
 
   Widget _chips() {
