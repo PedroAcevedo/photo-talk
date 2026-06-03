@@ -20,7 +20,25 @@ class PhotoTalkProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AuthState>();
-    final user = state.userModel;
+    final profile = state.userModel;
+    final authUser = state.user; // Firebase Auth user, when profile is null
+
+    // Resolve each field with a sane fallback chain:
+    //   profile.displayName -> auth.displayName -> email prefix -> "Friend"
+    final email = profile?.email ?? authUser?.email ?? '';
+    final displayName = profile?.displayName ??
+        authUser?.displayName ??
+        (email.contains('@') ? email.split('@').first : 'Friend');
+    final photoUrl = profile?.profilePic ?? authUser?.photoURL;
+    final uid = profile?.userId ?? authUser?.uid;
+
+    // If we have a Firebase Auth user but no profile model yet, kick off
+    // a profile fetch (which will self-heal if no /profile/{uid} exists).
+    if (profile == null && authUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        state.getProfileUser();
+      });
+    }
 
     return Scaffold(
       backgroundColor: PhotoTalkPalette.background,
@@ -36,13 +54,17 @@ class PhotoTalkProfilePage extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
-              _header(user?.displayName, user?.email, user?.profilePic),
+              _header(displayName, email, photoUrl),
               const SizedBox(height: 24),
               _section(title: 'Your details', rows: [
-                _row(Icons.person_outline, 'Name',
-                    user?.displayName ?? 'Not set'),
-                _row(Icons.mail_outline, 'Email', user?.email ?? 'Not set'),
-                _row(Icons.badge_outlined, 'Role', 'Family member'),
+                _row(Icons.person_outline, 'Name', displayName),
+                _row(Icons.mail_outline, 'Email',
+                    email.isEmpty ? 'Not set' : email),
+                _row(Icons.badge_outlined, 'Role',
+                    profile == null ? 'Care recipient' : 'Family member'),
+                if (uid != null)
+                  _row(Icons.fingerprint, 'Account ID',
+                      uid.substring(0, uid.length.clamp(0, 12)) + '…'),
               ]),
               const SizedBox(height: 16),
               _section(title: 'Preferences', rows: [

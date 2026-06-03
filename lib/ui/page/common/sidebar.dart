@@ -24,6 +24,13 @@ class SidebarMenu extends StatefulWidget {
 class _SidebarMenuState extends State<SidebarMenu> {
   Widget _menuHeader() {
     final state = context.watch<AuthState>();
+    // If userModel is missing but a Firebase Auth user exists, kick the
+    // profile fetch (it self-heals when no /profile/{uid} record exists).
+    if (state.userModel == null && state.user != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        state.getProfileUser();
+      });
+    }
     if (state.userModel == null) {
       return ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 200, minHeight: 100),

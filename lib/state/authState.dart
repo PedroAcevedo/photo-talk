@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/helper/shared_prefrence_helper.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
@@ -400,16 +401,54 @@ class AuthState extends AppState {
               }
 
               getIt<SharedPreferenceHelper>().saveUserProfile(_userModel!);
+              notifyListeners();
             }
 
             Utility.logEvent('get_profile', parameter: {});
           }
+        } else if (userProfileId == user?.uid) {
+          // PhotoTalk self-heal: a Firebase Auth user exists but has no
+          // /profile/{uid} node yet (e.g. the original signup write was
+          // blocked by rules, or this user was created in the console
+          // directly). Build a minimal profile from Auth data so the rest
+          // of the app has a UserModel to work with.
+          await _selfHealProfile();
         }
         isBusy = false;
       });
     } catch (error) {
       isBusy = false;
       cprint(error, errorIn: 'getProfileUser');
+    }
+  }
+
+  /// Create a /profile/{uid} node from the Firebase Auth user when one
+  /// doesn't exist yet. Safe to call repeatedly; only writes when missing.
+  Future<void> _selfHealProfile() async {
+    final fbUser = user;
+    if (fbUser == null) return;
+    final email = fbUser.email ?? '';
+    final displayName = (fbUser.displayName?.trim().isNotEmpty ?? false)
+        ? fbUser.displayName!
+        : (email.contains('@') ? email.split('@').first : 'Friend');
+    final model = UserModel(
+      email: email,
+      displayName: displayName,
+      profilePic: fbUser.photoURL ?? Constants.dummyProfilePic,
+      userId: fbUser.uid,
+      userName: Utility.getUserName(id: fbUser.uid, name: displayName),
+      isVerified: fbUser.emailVerified,
+      createdAt: DateTime.now().toUtc().toString(),
+      bio: 'Edit profile to update bio',
+      key: fbUser.uid,
+    );
+    try {
+      await kDatabase.child('profile').child(fbUser.uid).set(model.toJson());
+      _userModel = model;
+      cprint('Self-healed profile for ${fbUser.uid}');
+      notifyListeners();
+    } catch (e) {
+      cprint(e, errorIn: '_selfHealProfile');
     }
   }
 

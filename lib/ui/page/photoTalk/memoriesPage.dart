@@ -374,7 +374,12 @@ class _MemoriesPageState extends State<MemoriesPage> {
   void _openCalmMode(BuildContext context) {
     final feedState = Provider.of<FeedState>(context, listen: false);
     final authState = Provider.of<AuthState>(context, listen: false);
-    final list = feedState.getTweetList(authState.userModel) ?? const [];
+    // getTweetList returns null when userModel is null. Fall back to the
+    // raw feedList (already reversed newest-first) so Calm Mode works
+    // even before the profile model has loaded.
+    final List<FeedModel> list = authState.userModel != null
+        ? (feedState.getTweetList(authState.userModel) ?? const [])
+        : (feedState.feedList ?? const []);
     final slides = list.map((m) {
       final p = _parse(m);
       return CalmSlide(
