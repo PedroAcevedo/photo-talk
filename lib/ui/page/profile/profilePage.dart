@@ -8,8 +8,6 @@ import 'package:flutter_twitter_clone/state/chats/chatState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/state/profile_state.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/EditProfilePage.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/follow/followingListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/profileImageView.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/tabPainter.dart';
@@ -486,31 +484,6 @@ class UserNameRowWidget extends StatelessWidget {
     }
   }
 
-  Widget _textButton(
-    BuildContext context,
-    String count,
-    String text,
-    Function onPressed,
-  ) {
-    return InkWell(
-      onTap: () {
-        onPressed();
-      },
-      child: Row(
-        children: <Widget>[
-          customText(
-            '$count ',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
-          customText(
-            text,
-            style: const TextStyle(color: AppColor.darkGrey, fontSize: 17),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -594,38 +567,6 @@ class UserNameRowWidget extends StatelessWidget {
                 Utility.getJoiningDate(user.createdAt),
                 style: const TextStyle(color: AppColor.darkGrey),
               ),
-            ],
-          ),
-        ),
-        Container(
-          alignment: Alignment.center,
-          child: Row(
-            children: <Widget>[
-              const SizedBox(
-                width: 10,
-                height: 30,
-              ),
-              _textButton(context, user.getFollower, ' Followers', () {
-                var state = context.read<ProfileState>();
-                Navigator.push(
-                  context,
-                  FollowerListPage.getRoute(
-                    profile: state.profileUserModel,
-                    userList: state.profileUserModel.followersList!,
-                  ),
-                );
-              }),
-              const SizedBox(width: 40),
-              _textButton(context, user.getFollowing, ' Following', () {
-                var state = context.read<ProfileState>();
-                Navigator.push(
-                  context,
-                  FollowingListPage.getRoute(
-                    profile: state.profileUserModel,
-                    userList: state.profileUserModel.followingList!,
-                  ),
-                );
-              }),
             ],
           ),
         ),

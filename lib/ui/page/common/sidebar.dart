@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/follow/followerListPage.dart';
-import 'package:flutter_twitter_clone/ui/page/profile/follow/followingListPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
@@ -101,71 +99,10 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   iconColor: AppColor.primary,
                   paddingIcon: 20),
             ),
-            Container(
-              alignment: Alignment.center,
-              child: Row(
-                children: <Widget>[
-                  const SizedBox(
-                    width: 17,
-                  ),
-                  _textButton(context, state.userModel!.getFollower,
-                      ' Followers', 'FollowerListPage'),
-                  const SizedBox(width: 10),
-                  _textButton(context, state.userModel!.getFollowing,
-                      ' Following', 'FollowingListPage'),
-                ],
-              ),
-            ),
           ],
         ),
       );
     }
-  }
-
-  Widget _textButton(
-      BuildContext context, String count, String text, String navigateTo) {
-    return InkWell(
-      onTap: () {
-        var authState = context.read<AuthState>();
-        late List<String> usersList;
-        authState.getProfileUser();
-        Navigator.pop(context);
-        switch (navigateTo) {
-          case "FollowerListPage":
-            usersList = authState.userModel!.followersList!;
-            Navigator.push(
-              context,
-              FollowerListPage.getRoute(
-                profile: authState.userModel!,
-                userList: usersList,
-              ),
-            );
-            break;
-          case "FollowingListPage":
-            usersList = authState.userModel!.followingList!;
-            Navigator.push(
-              context,
-              FollowingListPage.getRoute(
-                profile: authState.userModel!,
-                userList: usersList,
-              ),
-            );
-            break;
-        }
-      },
-      child: Row(
-        children: <Widget>[
-          customText(
-            '$count ',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
-          customText(
-            text,
-            style: const TextStyle(color: AppColor.darkGrey, fontSize: 17),
-          ),
-        ],
-      ),
-    );
   }
 
   ListTile _menuListRowButton(String title,
