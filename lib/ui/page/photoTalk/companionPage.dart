@@ -653,7 +653,13 @@ class CompanionHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final feedState = context.watch<FeedState>();
     final authState = context.watch<AuthState>();
-    final list = feedState.getTweetList(authState.userModel) ?? const [];
+
+    // getTweetList returns null when userModel is null (e.g. when the
+    // profile fetch hasn't completed yet). Fall back to feedList directly
+    // so the Companion tab still shows memories during that window.
+    final List<FeedModel> list = authState.userModel != null
+        ? (feedState.getTweetList(authState.userModel) ?? const [])
+        : (feedState.feedList ?? const []);
 
     return Scaffold(
       backgroundColor: PhotoTalkPalette.background,

@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/services/snippet_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
@@ -19,6 +20,7 @@ class SnippetsPage extends StatefulWidget {
 class _SnippetsPageState extends State<SnippetsPage> {
   final SnippetService _service = SnippetService();
   Future<List<StorySnippet>>? _future;
+  String? _activeUserId;
 
   @override
   void initState() {
@@ -28,7 +30,11 @@ class _SnippetsPageState extends State<SnippetsPage> {
 
   void _load() {
     final authState = Provider.of<AuthState>(context, listen: false);
-    final userId = authState.userModel?.userId;
+    // Use the profile model's userId if loaded; otherwise fall back to the
+    // raw Firebase Auth UID so reads start even before the profile fetch.
+    final userId =
+        authState.userModel?.userId ?? authState.user?.uid;
+    _activeUserId = userId;
     if (userId == null) {
       _future = Future.value(<StorySnippet>[]);
     } else {
@@ -73,6 +79,21 @@ class _SnippetsPageState extends State<SnippetsPage> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+
+                // If the read errored (most often permission-denied or
+                // no databaseURL), show the actual reason so it's clear
+                // what to fix in Firebase.
+                if (snap.hasError) {
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                    children: [
+                      _errorBanner(snap.error!),
+                      const SizedBox(height: 16),
+                      _diagnosticsCard(),
+                    ],
+                  );
+                }
+
                 final list = snap.data ?? const <StorySnippet>[];
                 final themes = _aggregateThemes(list);
                 return ListView(
@@ -98,9 +119,11 @@ class _SnippetsPageState extends State<SnippetsPage> {
                       style: PhotoTalkText.h2,
                     ),
                     const SizedBox(height: 10),
-                    if (list.isEmpty)
-                      _emptyHint()
-                    else
+                    if (list.isEmpty) ...[
+                      _emptyHint(),
+                      const SizedBox(height: 16),
+                      _diagnosticsCard(),
+                    ] else
                       for (final s in list) _snippetCard(s),
                     const SizedBox(height: 24),
                     _familyStorylineCard(context),
@@ -144,6 +167,77 @@ class _SnippetsPageState extends State<SnippetsPage> {
       return PhotoTalkPalette.accentRose;
     }
     return PhotoTalkPalette.accentLavender;
+  }
+
+  Widget _errorBanner(Object error) {
+    String headline = "Couldn't read snippets from Firebase";
+    String detail = error.toString();
+    if (error is FirebaseException) {
+      headline = 'Firebase ${error.plugin} error: ${error.code}';
+      detail = error.message ?? detail;
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: PhotoTalkPalette.accentRose.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: PhotoTalkPalette.accentRose.withOpacity(0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cloud_off_outlined,
+              color: PhotoTalkPalette.accentRose),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(headline,
+                    style: PhotoTalkText.body
+                        .copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(detail, style: PhotoTalkText.caption.copyWith(fontSize: 14)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _diagnosticsCard() {
+    // Helps verify exactly which database path the app is asking for.
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: PhotoTalkPalette.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PhotoTalkPalette.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.info_outline,
+                color: PhotoTalkPalette.textSecondary, size: 18),
+            const SizedBox(width: 6),
+            Text('Where this tab reads from',
+                style: PhotoTalkText.chip.copyWith(
+                    color: PhotoTalkPalette.textSecondary, fontSize: 13)),
+          ]),
+          const SizedBox(height: 6),
+          SelectableText(
+            _activeUserId == null
+                ? '/snippets/<NO USER>'
+                : '/snippets/$_activeUserId',
+            style: PhotoTalkText.caption
+                .copyWith(fontFamily: 'monospace', fontSize: 13),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _emptyHint() {
