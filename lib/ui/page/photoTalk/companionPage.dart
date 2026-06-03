@@ -476,7 +476,7 @@ class _CompanionPageState extends State<CompanionPage> {
           ),
           child: m.isPending
               ? const SizedBox(
-                  width: 28,
+                  width: 30,
                   height: 18,
                   child: _TypingDots(),
                 )
