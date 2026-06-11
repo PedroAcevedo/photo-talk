@@ -115,51 +115,71 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: widget.imageUrl == null
-                          ? Container(
-                              color: Colors.white24,
-                              child: const Icon(Icons.photo_outlined,
-                                  color: Colors.white70, size: 80),
-                            )
-                          : Image.network(
-                              widget.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.white24,
-                                child: const Icon(Icons.photo_outlined,
-                                    color: Colors.white70, size: 80),
-                              ),
+            // LayoutBuilder lets us cap the photo so that image + caption +
+            // player always fit. On tighter heights (landscape tablets,
+            // short windows) we scroll instead of overflowing.
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final maxH = constraints.maxHeight;
+                // Reserve room for caption (~80) + player (~220) + paddings.
+                final photoSide = (maxH - 320).clamp(140.0, 360.0);
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: maxH),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 24),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: SizedBox(
+                              width: photoSide,
+                              height: photoSide,
+                              child: widget.imageUrl == null
+                                  ? Container(
+                                      color: Colors.white24,
+                                      child: const Icon(Icons.photo_outlined,
+                                          color: Colors.white70, size: 80),
+                                    )
+                                  : Image.network(
+                                      widget.imageUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.white24,
+                                        child: const Icon(
+                                            Icons.photo_outlined,
+                                            color: Colors.white70,
+                                            size: 80),
+                                      ),
+                                    ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            widget.caption,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _player_widget(song),
+                        const SizedBox(height: 24),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    widget.caption,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                _player_widget(song),
-                const SizedBox(height: 24),
-              ],
+                );
+              },
             ),
           ),
         ),

@@ -79,11 +79,25 @@ class _SignupState extends State<Signup> {
       return;
     }
     setState(() => _busy = true);
-    final recipientId = await _careCircle.resolveCode(code);
+    String? recipientId;
+    try {
+      recipientId = await _careCircle.resolveCode(code).timeout(
+            const Duration(seconds: 10),
+          );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _toast(
+        "Couldn't reach the family-code service. Check your internet "
+        "connection and your Firebase rules for /joinCodes.",
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _busy = false);
     if (recipientId == null) {
-      _toast("That code doesn't match any account. Double-check with your family member.");
+      _toast(
+          "That code doesn't match any account. Double-check with your family member.");
       return;
     }
     setState(() {

@@ -8,8 +8,8 @@
     },
 
     "joinCodes": {
-      ".read": "auth != null",
       "$code": {
+        ".read": true,
         ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid)"
       }
     },

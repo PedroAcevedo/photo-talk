@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/services/care_settings_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:flutter_twitter_clone/ui/page/Auth/selectAuthMethod.dart';
 import 'package:provider/provider.dart';
 
 import 'photoTalkTheme.dart';
@@ -296,9 +297,17 @@ class PhotoTalkProfilePage extends StatelessWidget {
     return SizedBox(
       height: 54,
       child: OutlinedButton.icon(
-        onPressed: () {
+        onPressed: () async {
           final state = Provider.of<AuthState>(context, listen: false);
-          state.logoutCallback();
+          final navigator = Navigator.of(context);
+          await state.logoutCallback();
+          if (!navigator.mounted) return;
+          // Wipe the whole stack and land on the welcome screen so the
+          // user can't go "back" into the now-empty home page.
+          navigator.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const WelcomePage()),
+            (route) => false,
+          );
         },
         icon: const Icon(Icons.logout_rounded),
         label: const Text('Sign out',
