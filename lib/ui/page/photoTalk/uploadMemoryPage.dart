@@ -54,7 +54,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
 
   Future<void> _pickAudio() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.audio,
         withData: true,
       );
@@ -142,7 +142,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     // The memory should land on the care recipient's feed. For family /
     // caregiver accounts that's their linkedRecipientId; for a care
     // recipient uploading to themselves, it's their own uid.
-    final recipientId = myUser.linkedRecipientId ?? myUser.userId ?? userId;
+    final recipientId = myUser?.linkedRecipientId ?? myUser?.userId ?? userId;
 
     final model = FeedModel(
       description: composedDescription,
