@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:flutter_twitter_clone/ui/page/Auth/selectAuthMethod.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
 import 'package:flutter_twitter_clone/ui/page/photoTalk/widgets/generic_avatar.dart' as photoTalk_avatar;
@@ -154,10 +155,19 @@ class _SidebarMenuState extends State<SidebarMenu> {
     );
   }
 
-  void _logOut() {
+  Future<void> _logOut() async {
     final state = Provider.of<AuthState>(context, listen: false);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    // Close the drawer first so it doesn't sit on top of the new route.
     Navigator.pop(context);
-    state.logoutCallback();
+    await state.logoutCallback();
+    if (!rootNavigator.mounted) return;
+    // Wipe the navigation stack and land on Welcome so the user can sign
+    // in as somebody else (or create a fresh account).
+    rootNavigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const WelcomePage()),
+      (route) => false,
+    );
   }
 
   void _navigateTo(String path) {
