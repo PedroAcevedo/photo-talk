@@ -1,7 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/firebase_options.dart';
-import 'package:flutter_twitter_clone/state/suggestionUserState.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -39,8 +38,6 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<SearchState>(create: (_) => SearchState()),
         ChangeNotifierProvider<NotificationState>(
             create: (_) => NotificationState()),
-        ChangeNotifierProvider<SuggestionsState>(
-            create: (_) => SuggestionsState()),
       ],
       child: MaterialApp(
         title: 'PhotoTalk',

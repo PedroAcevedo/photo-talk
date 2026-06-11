@@ -10,12 +10,10 @@ import 'package:flutter_twitter_clone/resource/push_notification_service.dart';
 import 'package:flutter_twitter_clone/state/appState.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/chats/chatState.dart';
-import 'package:flutter_twitter_clone/state/suggestionUserState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/state/notificationState.dart';
 import 'package:flutter_twitter_clone/state/searchState.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/feedPostDetail.dart';
-import 'package:flutter_twitter_clone/ui/page/feed/suggestedUsers.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/caregiverRecapPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/companionPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/memoriesPage.dart';
@@ -207,14 +205,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AuthState>();
-    context.read<SuggestionsState>().initUser(state.userModel);
-
-    if (context
-        .select<SuggestionsState, bool>((state) => state.displaySuggestions)) {
-      return SuggestedUsers();
-    }
-
     return Scaffold(
       key: _scaffoldKey,
       bottomNavigationBar: const BottomMenubar(),

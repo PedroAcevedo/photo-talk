@@ -68,6 +68,26 @@ class SnippetService {
     return ref.key;
   }
 
+  /// Patch specific fields on an existing snippet.
+  Future<void> update(
+    String userId,
+    String key, {
+    String? quote,
+    String? theme,
+    String? person,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (quote != null) patch['quote'] = quote;
+    if (theme != null) patch['theme'] = theme;
+    if (person != null) patch['person'] = person;
+    if (patch.isEmpty) return;
+    await _userRef(userId).child(key).update(patch);
+  }
+
+  Future<void> delete(String userId, String key) async {
+    await _userRef(userId).child(key).remove();
+  }
+
   Future<List<StorySnippet>> recent(String userId,
       {int limit = 30}) async {
     final event = await _userRef(userId)

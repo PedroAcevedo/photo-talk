@@ -13,6 +13,8 @@ import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'package:file_picker/file_picker.dart';
+
 import 'photoTalkTheme.dart';
 
 /// "Upload a memory" - the PhotoTalk replacement for compose-tweet.
@@ -29,6 +31,10 @@ class UploadMemoryPage extends StatefulWidget {
 class _UploadMemoryPageState extends State<UploadMemoryPage> {
   XFile? _photo;
   Uint8List? _photoBytes;
+  // Audio attachment (mp3/m4a/wav/aac). We keep the bytes in memory so
+  // the upload works on web too, where File paths aren't reliable.
+  String? _audioName;
+  Uint8List? _audioBytes;
   final _caption = TextEditingController();
   final _who = TextEditingController();
   final _where = TextEditingController();
@@ -44,6 +50,28 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     _why.dispose();
     _song.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAudio() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final f = result.files.first;
+      if (f.bytes == null) {
+        Utility.customSnackBar(
+            context, "Couldn't read that file. Try a different one.");
+        return;
+      }
+      setState(() {
+        _audioName = f.name;
+        _audioBytes = f.bytes;
+      });
+    } catch (e) {
+      Utility.customSnackBar(context, "Couldn't open audio: $e");
+    }
   }
 
   Future<void> _pickPhoto({required ImageSource source}) async {
@@ -111,12 +139,18 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       if (_song.text.trim().isNotEmpty) 'Song: ${_song.text.trim()}',
     ].where((s) => s.isNotEmpty).join('\n');
 
+    // The memory should land on the care recipient's feed. For family /
+    // caregiver accounts that's their linkedRecipientId; for a care
+    // recipient uploading to themselves, it's their own uid.
+    final recipientId = myUser.linkedRecipientId ?? myUser.userId ?? userId;
+
     final model = FeedModel(
       description: composedDescription,
       user: user,
       createdAt: DateTime.now().toUtc().toString(),
       userId: userId,
       tags: const ['memory'],
+      careRecipientId: recipientId,
     );
 
     try {
@@ -190,10 +224,41 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       model.imagePath = await ref.getDownloadURL();
     }
 
+    if (_audioBytes != null && _audioName != null) {
+      final safeName =
+          _audioName!.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final filename =
+          '${DateTime.now().toIso8601String().replaceAll(':', '-')}_$safeName';
+      final guessedMime = _guessAudioMime(safeName);
+      final ref =
+          FirebaseStorage.instance.ref().child('tweetAudio').child(filename);
+      await ref.putData(
+        _audioBytes!,
+        SettableMetadata(contentType: guessedMime),
+      );
+      model.audioPath = await ref.getDownloadURL();
+    }
+
+    // Pull the song title out of the existing _song field so the player
+    // can show it alongside the audio.
+    if (_song.text.trim().isNotEmpty) {
+      model.songTitle = _song.text.trim();
+    }
+
     final db = FirebaseDatabase.instance.ref();
     final newRef = db.child('tweet').push();
     await newRef.set(model.toJson());
     model.key = newRef.key;
+  }
+
+  String _guessAudioMime(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.mp3')) return 'audio/mpeg';
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) return 'audio/mp4';
+    if (lower.endsWith('.aac')) return 'audio/aac';
+    if (lower.endsWith('.wav')) return 'audio/wav';
+    if (lower.endsWith('.ogg') || lower.endsWith('.oga')) return 'audio/ogg';
+    return 'audio/mpeg';
   }
 
   @override
@@ -430,6 +495,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
   }
 
   Widget _audioNotePlaceholder() {
+    final hasAudio = _audioBytes != null && _audioName != null;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -440,23 +506,55 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.mic_none_rounded,
+          const Icon(Icons.music_note_rounded,
               color: PhotoTalkPalette.accentBlue, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Add a voice note',
-                    style: PhotoTalkText.body
-                        .copyWith(fontWeight: FontWeight.w600)),
                 Text(
-                  'Record your own voice telling the story (coming soon)',
+                  hasAudio ? 'Music attached' : 'Add a song or audio',
+                  style: PhotoTalkText.body
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  hasAudio
+                      ? _audioName!
+                      : 'Tap to attach an mp3, m4a, or wav file from this device.',
                   style: PhotoTalkText.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          if (hasAudio)
+            IconButton(
+              tooltip: 'Remove',
+              icon: const Icon(Icons.close_rounded,
+                  color: PhotoTalkPalette.accentBlue),
+              onPressed: () => setState(() {
+                _audioBytes = null;
+                _audioName = null;
+              }),
+            )
+          else
+            ElevatedButton.icon(
+              onPressed: _pickAudio,
+              icon: const Icon(Icons.attach_file_rounded, size: 18),
+              label: const Text('Choose'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PhotoTalkPalette.accentBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
         ],
       ),
     );

@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_clone/services/care_settings_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:provider/provider.dart';
 
 import 'photoTalkTheme.dart';
+import 'widgets/generic_avatar.dart';
 
 /// A slim PhotoTalk profile page.
 ///
 /// Replaces the original Twitter-clone profile screen with a calm
 /// large-text layout that surfaces the things a care recipient or
-/// caregiver actually needs to see: name, email, role, and a clear
-/// way to sign out.
+/// caregiver actually needs to see: name, email, role, family code,
+/// and the AI-disabled toggle that any care-circle member can flip.
 class PhotoTalkProfilePage extends StatelessWidget {
   const PhotoTalkProfilePage({Key? key}) : super(key: key);
 
@@ -61,11 +63,20 @@ class PhotoTalkProfilePage extends StatelessWidget {
                 _row(Icons.mail_outline, 'Email',
                     email.isEmpty ? 'Not set' : email),
                 _row(Icons.badge_outlined, 'Role',
-                    profile == null ? 'Care recipient' : 'Family member'),
+                    _humanRole(profile?.role)),
                 if (uid != null)
                   _row(Icons.fingerprint, 'Account ID',
                       uid.substring(0, uid.length.clamp(0, 12)) + '…'),
               ]),
+              if (profile?.role == 'care_recipient' &&
+                  profile?.joinCode != null) ...[
+                const SizedBox(height: 16),
+                _joinCodeCard(context, profile!.joinCode!),
+              ],
+              const SizedBox(height: 16),
+              _careCircleControls(
+                profile?.linkedRecipientId ?? profile?.userId ?? uid,
+              ),
               const SizedBox(height: 16),
               _section(title: 'Preferences', rows: [
                 _row(Icons.spa_outlined, 'Default mode', 'Calm Mode'),
@@ -81,6 +92,136 @@ class PhotoTalkProfilePage extends StatelessWidget {
     );
   }
 
+  String _humanRole(String? role) {
+    switch (role) {
+      case 'care_recipient':
+        return 'Care recipient';
+      case 'family':
+        return 'Family member';
+      case 'caregiver':
+        return 'Caregiver';
+      default:
+        return 'Care recipient';
+    }
+  }
+
+  Widget _careCircleControls(String? recipientId) {
+    if (recipientId == null) return const SizedBox.shrink();
+    final service = CareSettingsService();
+    return StreamBuilder<CareSettings>(
+      stream: service.watch(recipientId),
+      builder: (context, snap) {
+        final settings = snap.data ?? const CareSettings();
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: PhotoTalkPalette.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: PhotoTalkPalette.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Care settings', style: PhotoTalkText.title),
+              const SizedBox(height: 4),
+              Text(
+                "Anyone in the care circle can change these.",
+                style: PhotoTalkText.caption,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.chat_bubble_outline,
+                      color: PhotoTalkPalette.textSecondary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          settings.aiDisabled
+                              ? 'AI Companion is off'
+                              : 'AI Companion is on',
+                          style: PhotoTalkText.body
+                              .copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          settings.aiDisabled
+                              ? "The 'Talk about it' button is paused."
+                              : 'Conversations are available from any memory.',
+                          style: PhotoTalkText.caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: !settings.aiDisabled,
+                    activeColor: PhotoTalkPalette.primary,
+                    onChanged: (on) async {
+                      try {
+                        await service.setAiDisabled(recipientId, !on);
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: PhotoTalkPalette.accentRose,
+                            content: Text("Couldn't change setting: $e",
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _joinCodeCard(BuildContext context, String code) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: PhotoTalkPalette.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(18),
+        border:
+            Border.all(color: PhotoTalkPalette.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.share_outlined,
+                color: PhotoTalkPalette.primary),
+            const SizedBox(width: 8),
+            Text('Family code', style: PhotoTalkText.title),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            "Share this code with family or your caregiver. When they sign up "
+            "and enter it, their memories will show on your feed.",
+            style: PhotoTalkText.body
+                .copyWith(color: PhotoTalkPalette.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          SelectableText(
+            code,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 6,
+              fontFamily: 'monospace',
+              color: PhotoTalkPalette.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _header(String? name, String? email, String? photoUrl) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 18),
@@ -91,29 +232,7 @@ class PhotoTalkProfilePage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ClipOval(
-            child: SizedBox(
-              width: 72,
-              height: 72,
-              child: photoUrl == null || photoUrl.isEmpty
-                  ? Container(
-                      color: PhotoTalkPalette.background,
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.person,
-                          size: 36, color: PhotoTalkPalette.textMuted),
-                    )
-                  : Image.network(
-                      photoUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: PhotoTalkPalette.background,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.person,
-                            size: 36, color: PhotoTalkPalette.textMuted),
-                      ),
-                    ),
-            ),
-          ),
+          const GenericAvatar(size: 72),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

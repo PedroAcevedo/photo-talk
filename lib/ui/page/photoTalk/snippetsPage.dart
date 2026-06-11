@@ -30,10 +30,12 @@ class _SnippetsPageState extends State<SnippetsPage> {
 
   void _load() {
     final authState = Provider.of<AuthState>(context, listen: false);
-    // Use the profile model's userId if loaded; otherwise fall back to the
-    // raw Firebase Auth UID so reads start even before the profile fetch.
-    final userId =
-        authState.userModel?.userId ?? authState.user?.uid;
+    // Snippets always live under the care recipient's bucket. Family /
+    // caregiver accounts see snippets for their linked recipient; the
+    // recipient sees their own.
+    final userId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
     _activeUserId = userId;
     if (userId == null) {
       _future = Future.value(<StorySnippet>[]);
@@ -79,10 +81,6 @@ class _SnippetsPageState extends State<SnippetsPage> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
-                // If the read errored (most often permission-denied or
-                // no databaseURL), show the actual reason so it's clear
-                // what to fix in Firebase.
                 if (snap.hasError) {
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -106,16 +104,14 @@ class _SnippetsPageState extends State<SnippetsPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: themes
-                            .map((t) => _ThemePill(t,
-                                color: _colorForTheme(t)))
+                            .map((t) =>
+                                _ThemePill(t, color: _colorForTheme(t)))
                             .toList(),
                       ),
                       const SizedBox(height: 24),
                     ],
                     Text(
-                      list.isEmpty
-                          ? 'No snippets yet'
-                          : 'Recent snippets',
+                      list.isEmpty ? 'No snippets yet' : 'Recent snippets',
                       style: PhotoTalkText.h2,
                     ),
                     const SizedBox(height: 10),
@@ -136,6 +132,8 @@ class _SnippetsPageState extends State<SnippetsPage> {
       ),
     );
   }
+
+  // ----- helpers --------------------------------------------------------
 
   List<String> _aggregateThemes(List<StorySnippet> list) {
     final counts = <String, int>{};
@@ -198,7 +196,8 @@ class _SnippetsPageState extends State<SnippetsPage> {
                     style: PhotoTalkText.body
                         .copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
-                Text(detail, style: PhotoTalkText.caption.copyWith(fontSize: 14)),
+                Text(detail,
+                    style: PhotoTalkText.caption.copyWith(fontSize: 14)),
               ],
             ),
           ),
@@ -208,7 +207,6 @@ class _SnippetsPageState extends State<SnippetsPage> {
   }
 
   Widget _diagnosticsCard() {
-    // Helps verify exactly which database path the app is asking for.
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -261,55 +259,181 @@ class _SnippetsPageState extends State<SnippetsPage> {
     final date = _humanDate(s.createdAt);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: PhotoTalkPalette.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: PhotoTalkPalette.divider),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.format_quote_rounded,
-              color: PhotoTalkPalette.primary, size: 28),
-          const SizedBox(height: 6),
-          Text(
-            '"${s.quote}"',
-            style: PhotoTalkText.bodyLarge
-                .copyWith(fontStyle: FontStyle.italic),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _openEditor(s),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (s.person != null && s.person!.isNotEmpty)
-                      Text('About ${s.person}',
-                          style: PhotoTalkText.chip.copyWith(
-                              color: PhotoTalkPalette.textSecondary)),
-                    if (s.theme != null && s.theme!.isNotEmpty)
-                      Text(s.theme!, style: PhotoTalkText.caption),
+                    const Icon(Icons.format_quote_rounded,
+                        color: PhotoTalkPalette.primary, size: 28),
+                    const Spacer(),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_horiz,
+                          color: PhotoTalkPalette.textSecondary),
+                      onSelected: (v) {
+                        if (v == 'edit') _openEditor(s);
+                        if (v == 'delete') _confirmDelete(s);
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit'),
+                            dense: true,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline,
+                                color: PhotoTalkPalette.accentRose),
+                            title: Text('Delete'),
+                            dense: true,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ),
-              Text(date,
-                  style: PhotoTalkText.caption
-                      .copyWith(color: PhotoTalkPalette.textMuted)),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  '"${s.quote}"',
+                  style: PhotoTalkText.bodyLarge
+                      .copyWith(fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (s.person != null && s.person!.isNotEmpty)
+                            Text('About ${s.person}',
+                                style: PhotoTalkText.chip.copyWith(
+                                    color: PhotoTalkPalette.textSecondary)),
+                          if (s.theme != null && s.theme!.isNotEmpty)
+                            Text(s.theme!, style: PhotoTalkText.caption),
+                        ],
+                      ),
+                    ),
+                    Text(date,
+                        style: PhotoTalkText.caption
+                            .copyWith(color: PhotoTalkPalette.textMuted)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openEditor(StorySnippet s) async {
+    if (s.key == null || _activeUserId == null) return;
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _SnippetEditor(snippet: s),
+    );
+    if (result == null) return;
+    try {
+      await _service.update(
+        _activeUserId!,
+        s.key!,
+        quote: result['quote'],
+        theme: result['theme'],
+        person: result['person'],
+      );
+      if (!mounted) return;
+      setState(_load);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: PhotoTalkPalette.accentGreen,
+          content: Text('Snippet updated.',
+              style: TextStyle(color: Colors.white)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: PhotoTalkPalette.accentRose,
+          content: Text("Couldn't update: $e",
+              style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDelete(StorySnippet s) async {
+    if (s.key == null || _activeUserId == null) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete this snippet?'),
+        content: const Text("This can't be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+                foregroundColor: PhotoTalkPalette.accentRose),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+    if (yes != true) return;
+    try {
+      await _service.delete(_activeUserId!, s.key!);
+      if (!mounted) return;
+      setState(_load);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Snippet deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: PhotoTalkPalette.accentRose,
+          content: Text("Couldn't delete: $e",
+              style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
   }
 
   String _humanDate(String iso) {
     try {
       final d = DateTime.parse(iso).toLocal();
       final now = DateTime.now();
+      if (now.year == d.year && now.month == d.month && now.day == d.day) {
+        return 'Today';
+      }
       final delta = now.difference(d);
-      if (delta.inDays == 0 && now.day == d.day) return 'Today';
       if (delta.inDays <= 1) return 'Yesterday';
       if (delta.inDays < 7) return '${delta.inDays} days ago';
       return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -324,8 +448,8 @@ class _SnippetsPageState extends State<SnippetsPage> {
       decoration: BoxDecoration(
         color: PhotoTalkPalette.accentLavender.withOpacity(0.12),
         borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: PhotoTalkPalette.accentLavender.withOpacity(0.5)),
+        border: Border.all(
+            color: PhotoTalkPalette.accentLavender.withOpacity(0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,6 +510,120 @@ class _ThemePill extends StatelessWidget {
           fontSize: 14,
         ),
       ),
+    );
+  }
+}
+
+class _SnippetEditor extends StatefulWidget {
+  const _SnippetEditor({required this.snippet});
+  final StorySnippet snippet;
+
+  @override
+  State<_SnippetEditor> createState() => _SnippetEditorState();
+}
+
+class _SnippetEditorState extends State<_SnippetEditor> {
+  late final TextEditingController _quote;
+  late final TextEditingController _theme;
+  late final TextEditingController _person;
+
+  @override
+  void initState() {
+    super.initState();
+    _quote = TextEditingController(text: widget.snippet.quote);
+    _theme = TextEditingController(text: widget.snippet.theme ?? '');
+    _person = TextEditingController(text: widget.snippet.person ?? '');
+  }
+
+  @override
+  void dispose() {
+    _quote.dispose();
+    _theme.dispose();
+    _person.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: PhotoTalkPalette.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text('Edit snippet', style: PhotoTalkText.h2),
+          const SizedBox(height: 16),
+          _field('Quote', _quote, maxLines: 4),
+          const SizedBox(height: 12),
+          _field('About (person)', _person),
+          const SizedBox(height: 12),
+          _field('Theme (e.g. joy, family)', _theme),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PhotoTalkPalette.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                textStyle: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop({
+                  'quote': _quote.text.trim(),
+                  'theme': _theme.text.trim(),
+                  'person': _person.text.trim(),
+                });
+              },
+              child: const Text('Save changes'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field(String label, TextEditingController c, {int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: PhotoTalkText.chip
+                .copyWith(color: PhotoTalkPalette.textSecondary)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: c,
+          maxLines: maxLines,
+          style: PhotoTalkText.bodyLarge,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: PhotoTalkPalette.surface,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: PhotoTalkPalette.divider),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                  color: PhotoTalkPalette.primary, width: 2),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

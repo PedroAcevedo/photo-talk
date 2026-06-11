@@ -1,32 +1,107 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 import 'photoTalkTheme.dart';
 
-/// Music + Captions Mode - large photo, on-screen caption,
-/// and a simple, fake "now playing" control. The audio backend is
-/// intentionally out of scope for this view-only pass.
+/// Music + Captions Mode — large photo, on-screen caption, real audio
+/// playback driven by [audioplayers]. If no [audioUrl] is provided the
+/// player shows a calm "no audio attached" state.
 class MusicCaptionsPage extends StatefulWidget {
   const MusicCaptionsPage({
     Key? key,
     required this.caption,
     this.imageUrl,
     this.song,
+    this.audioUrl,
   }) : super(key: key);
 
   final String caption;
   final String? imageUrl;
   final String? song;
+  final String? audioUrl;
 
   @override
   State<MusicCaptionsPage> createState() => _MusicCaptionsPageState();
 }
 
 class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
-  bool _playing = true;
+  final AudioPlayer _player = AudioPlayer();
+  PlayerState _state = PlayerState.stopped;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  String? _loadError;
+
+  bool get _hasAudio =>
+      widget.audioUrl != null && widget.audioUrl!.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerStateChanged.listen((s) {
+      if (!mounted) return;
+      setState(() => _state = s);
+    });
+    _player.onPositionChanged.listen((p) {
+      if (!mounted) return;
+      setState(() => _position = p);
+    });
+    _player.onDurationChanged.listen((d) {
+      if (!mounted) return;
+      setState(() => _duration = d);
+    });
+    _player.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() => _position = _duration);
+    });
+    if (_hasAudio) {
+      _autoPlay();
+    }
+  }
+
+  Future<void> _autoPlay() async {
+    try {
+      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.play(UrlSource(widget.audioUrl!));
+    } catch (e) {
+      if (mounted) setState(() => _loadError = e.toString());
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    if (!_hasAudio) return;
+    try {
+      if (_state == PlayerState.playing) {
+        await _player.pause();
+      } else if (_state == PlayerState.paused) {
+        await _player.resume();
+      } else {
+        await _player.play(UrlSource(widget.audioUrl!));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadError = e.toString());
+    }
+  }
+
+  Future<void> _seekRelative(Duration delta) async {
+    if (!_hasAudio) return;
+    final target = _position + delta;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (_duration > Duration.zero && target > _duration
+            ? _duration
+            : target);
+    await _player.seek(clamped);
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final song = widget.song ?? 'A gentle melody';
+    final song = widget.song ?? (_hasAudio ? 'A gentle melody' : 'No song attached');
     return Scaffold(
       backgroundColor: PhotoTalkPalette.accentBlue,
       appBar: AppBar(
@@ -37,57 +112,67 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
             style: TextStyle(fontWeight: FontWeight.w600)),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: widget.imageUrl == null
-                      ? Container(
-                          color: Colors.white24,
-                          child: const Icon(Icons.photo_outlined,
-                              color: Colors.white70, size: 80),
-                        )
-                      : Image.network(
-                          widget.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white24,
-                            child: const Icon(Icons.photo_outlined,
-                                color: Colors.white70, size: 80),
-                          ),
-                        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: widget.imageUrl == null
+                          ? Container(
+                              color: Colors.white24,
+                              child: const Icon(Icons.photo_outlined,
+                                  color: Colors.white70, size: 80),
+                            )
+                          : Image.network(
+                              widget.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.white24,
+                                child: const Icon(Icons.photo_outlined,
+                                    color: Colors.white70, size: 80),
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                widget.caption,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    widget.caption,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
                 ),
-              ),
+                const Spacer(),
+                _player_widget(song),
+                const SizedBox(height: 24),
+              ],
             ),
-            const Spacer(),
-            _player(song),
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _player(String song) {
+  Widget _player_widget(String song) {
+    final isPlaying = _state == PlayerState.playing;
+    final hasDuration = _duration > Duration.zero;
+    final progress = hasDuration
+        ? (_position.inMilliseconds / _duration.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -99,48 +184,84 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.music_note_rounded,
-                  color: PhotoTalkPalette.accentBlue),
+              Icon(
+                _hasAudio
+                    ? Icons.music_note_rounded
+                    : Icons.music_off_rounded,
+                color: PhotoTalkPalette.accentBlue,
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(song,
-                    style: PhotoTalkText.body
-                        .copyWith(fontWeight: FontWeight.w600)),
+                child: Text(
+                  song,
+                  style: PhotoTalkText.body
+                      .copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          // Static "progress" line for visual completeness.
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: const LinearProgressIndicator(
-              value: 0.35,
+            child: LinearProgressIndicator(
+              value: progress,
               minHeight: 6,
               backgroundColor: PhotoTalkPalette.divider,
-              valueColor: AlwaysStoppedAnimation(PhotoTalkPalette.accentBlue),
+              valueColor: const AlwaysStoppedAnimation(
+                  PhotoTalkPalette.accentBlue),
             ),
           ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_fmt(_position),
+                    style: PhotoTalkText.caption.copyWith(fontSize: 12)),
+                Text(hasDuration ? _fmt(_duration) : '--:--',
+                    style: PhotoTalkText.caption.copyWith(fontSize: 12)),
+              ],
+            ),
+          ),
+          if (_loadError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              "Couldn't play this audio. ${_loadError!}",
+              style: PhotoTalkText.caption
+                  .copyWith(color: PhotoTalkPalette.accentRose, fontSize: 12),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
                 iconSize: 36,
-                onPressed: () {},
-                icon: const Icon(Icons.skip_previous_rounded,
+                onPressed:
+                    _hasAudio ? () => _seekRelative(const Duration(seconds: -10)) : null,
+                icon: const Icon(Icons.replay_10_rounded,
                     color: PhotoTalkPalette.accentBlue),
               ),
               const SizedBox(width: 8),
               Material(
-                color: PhotoTalkPalette.accentBlue,
+                color: _hasAudio
+                    ? PhotoTalkPalette.accentBlue
+                    : PhotoTalkPalette.divider,
                 shape: const CircleBorder(),
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onTap: () => setState(() => _playing = !_playing),
+                  onTap: _hasAudio ? _togglePlay : null,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Icon(
-                      _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      isPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
                       color: Colors.white,
                       size: 32,
                     ),
@@ -150,8 +271,9 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
               const SizedBox(width: 8),
               IconButton(
                 iconSize: 36,
-                onPressed: () {},
-                icon: const Icon(Icons.skip_next_rounded,
+                onPressed:
+                    _hasAudio ? () => _seekRelative(const Duration(seconds: 10)) : null,
+                icon: const Icon(Icons.forward_10_rounded,
                     color: PhotoTalkPalette.accentBlue),
               ),
             ],
@@ -159,5 +281,11 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
         ],
       ),
     );
+  }
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 }

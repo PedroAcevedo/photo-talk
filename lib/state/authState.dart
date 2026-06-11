@@ -424,6 +424,8 @@ class AuthState extends AppState {
 
   /// Create a /profile/{uid} node from the Firebase Auth user when one
   /// doesn't exist yet. Safe to call repeatedly; only writes when missing.
+  /// Defaults the role to `care_recipient` and mints a join code, so older
+  /// orphaned accounts can act as a feed target after the upgrade.
   Future<void> _selfHealProfile() async {
     final fbUser = user;
     if (fbUser == null) return;
@@ -431,25 +433,47 @@ class AuthState extends AppState {
     final displayName = (fbUser.displayName?.trim().isNotEmpty ?? false)
         ? fbUser.displayName!
         : (email.contains('@') ? email.split('@').first : 'Friend');
+    // Mint a join code so this user can be linked to family members later.
+    final joinCode = _generateJoinCode();
     final model = UserModel(
       email: email,
       displayName: displayName,
-      profilePic: fbUser.photoURL ?? Constants.dummyProfilePic,
+      profilePic: null,
       userId: fbUser.uid,
       userName: Utility.getUserName(id: fbUser.uid, name: displayName),
       isVerified: fbUser.emailVerified,
       createdAt: DateTime.now().toUtc().toString(),
       bio: 'Edit profile to update bio',
       key: fbUser.uid,
+      role: 'care_recipient',
+      joinCode: joinCode,
+      linkedRecipientId: fbUser.uid,
     );
     try {
       await kDatabase.child('profile').child(fbUser.uid).set(model.toJson());
+      // Reserve the code in /joinCodes so family accounts can find this one.
+      await kDatabase.child('joinCodes').child(joinCode).set({
+        'userId': fbUser.uid,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      });
       _userModel = model;
       cprint('Self-healed profile for ${fbUser.uid}');
       notifyListeners();
     } catch (e) {
       cprint(e, errorIn: '_selfHealProfile');
     }
+  }
+
+  static String _generateJoinCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final r = DateTime.now().microsecondsSinceEpoch;
+    var seed = r;
+    final buf = StringBuffer();
+    for (var i = 0; i < 6; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      buf.write(alphabet[seed % alphabet.length]);
+    }
+    return buf.toString();
   }
 
   /// if firebase token not available in profile

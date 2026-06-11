@@ -18,6 +18,7 @@ class MemoryCard extends StatelessWidget {
     this.why,
     this.imageUrl,
     this.song,
+    this.hasAudio = false,
     this.tags = const [],
     this.onTalk,
     this.onPlayMusic,
@@ -30,6 +31,9 @@ class MemoryCard extends StatelessWidget {
   final String? why;
   final String? imageUrl;
   final String? song;
+  /// True when this memory has an uploaded audio file. Causes the play
+  /// button to read "Play music" instead of "Listen".
+  final bool hasAudio;
   final List<String> tags;
 
   final VoidCallback? onTalk;
@@ -247,8 +251,12 @@ class MemoryCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: _primaryAction(
-              icon: Icons.play_circle_outline,
-              label: song == null ? 'Listen' : 'Play music',
+              icon: hasAudio
+                  ? Icons.play_circle_outline
+                  : Icons.menu_book_outlined,
+              label: hasAudio
+                  ? 'Play music'
+                  : (song != null ? 'View song' : 'Captions'),
               color: PhotoTalkPalette.accentBlue,
               onPressed: onPlayMusic,
             ),

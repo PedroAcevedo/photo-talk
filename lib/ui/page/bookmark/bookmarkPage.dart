@@ -72,6 +72,8 @@ class _BookmarkBody extends StatelessWidget {
     return MemoryCard(
       caption: caption,
       who: m.user?.displayName,
+      song: m.songTitle,
+      hasAudio: m.audioPath != null && m.audioPath!.isNotEmpty,
       imageUrl: m.imagePath,
       tags: m.tags ?? const [],
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
@@ -85,6 +87,8 @@ class _BookmarkBody extends StatelessWidget {
         builder: (_) => MusicCaptionsPage(
           caption: caption,
           imageUrl: m.imagePath,
+          song: m.songTitle,
+          audioUrl: m.audioPath,
         ),
       )),
     );

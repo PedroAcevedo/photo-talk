@@ -19,6 +19,16 @@ class FeedModel {
   String?
       lanCode; //Saving the language of the tweet so to not translate to check which language
   UserModel? user;
+  /// PhotoTalk: the care recipient on whose feed this memory should
+  /// appear. Equals the uploader's linkedRecipientId (or their own uid,
+  /// if they are themselves a care recipient).
+  String? careRecipientId;
+  /// PhotoTalk: optional uploaded audio (mp3/m4a/wav) attached to the
+  /// memory. Played in Music + Captions mode.
+  String? audioPath;
+  /// PhotoTalk: optional human-readable song title separate from the
+  /// audio URL.
+  String? songTitle;
   FeedModel(
       {this.key,
       this.description,
@@ -34,7 +44,10 @@ class FeedModel {
       this.replyTweetKeyList,
       this.parentkey,
       this.lanCode,
-      this.childRetwetkey});
+      this.childRetwetkey,
+      this.careRecipientId,
+      this.audioPath,
+      this.songTitle});
   toJson() {
     return {
       "userId": userId,
@@ -50,7 +63,10 @@ class FeedModel {
       "user": user == null ? null : user!.toJson(),
       "parentkey": parentkey,
       "lanCode": lanCode,
-      "childRetwetkey": childRetwetkey
+      "childRetwetkey": childRetwetkey,
+      "careRecipientId": careRecipientId,
+      "audioPath": audioPath,
+      "songTitle": songTitle,
     };
   }
 
@@ -68,6 +84,9 @@ class FeedModel {
     user = UserModel.fromJson(map['user']);
     parentkey = map['parentkey'];
     childRetwetkey = map['childRetwetkey'];
+    careRecipientId = map['careRecipientId'];
+    audioPath = map['audioPath'];
+    songTitle = map['songTitle'];
     if (map['tags'] != null) {
       tags = <String>[];
       map['tags'].forEach((value) {

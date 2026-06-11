@@ -31,7 +31,10 @@ class _CaregiverRecapPageState extends State<CaregiverRecapPage> {
 
   void _load() {
     final auth = Provider.of<AuthState>(context, listen: false);
-    final userId = auth.userModel?.userId ?? auth.user?.uid;
+    // Caregiver/family see the recap for their linked care recipient.
+    final userId = auth.userModel?.linkedRecipientId ??
+        auth.userModel?.userId ??
+        auth.user?.uid;
     if (userId == null) {
       _future = Future.value(_RecapData.empty());
     } else {

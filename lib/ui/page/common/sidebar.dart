@@ -3,6 +3,7 @@ import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
+import 'package:flutter_twitter_clone/ui/page/photoTalk/widgets/generic_avatar.dart' as photoTalk_avatar;
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
@@ -47,20 +48,9 @@ class _SidebarMenuState extends State<SidebarMenu> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Container(
-              height: 56,
-              width: 56,
-              margin: const EdgeInsets.only(left: 17, top: 10),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(28),
-                image: DecorationImage(
-                  image: customAdvanceNetworkImage(
-                    state.userModel!.profilePic ?? Constants.dummyProfilePic,
-                  ),
-                  fit: BoxFit.cover,
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.only(left: 17, top: 10),
+              child: const photoTalk_avatar.GenericAvatar(size: 56),
             ),
             ListTile(
               onTap: () {

@@ -166,9 +166,28 @@ class _MemoriesPageState extends State<MemoriesPage> {
     return Consumer<FeedState>(
       builder: (context, state, _) {
         final authState = Provider.of<AuthState>(context, listen: false);
-        final List<FeedModel>? list = authState.userModel == null
+        final rawList = authState.userModel == null
             ? state.feedList
             : state.getTweetList(authState.userModel);
+
+        // Restrict to memories whose careRecipientId matches this user's
+        // care recipient. Family / caregiver users see only their loved
+        // one's feed; recipients see only their own.
+        final myRecipientId =
+            authState.userModel?.linkedRecipientId ??
+                authState.userModel?.userId ??
+                authState.user?.uid;
+        final list = rawList == null
+            ? null
+            : rawList.where((m) {
+                // Backwards compatibility: items uploaded before the
+                // careRecipientId field existed are visible to the
+                // uploader and recipient only.
+                if (m.careRecipientId == null || m.careRecipientId!.isEmpty) {
+                  return m.userId == myRecipientId;
+                }
+                return m.careRecipientId == myRecipientId;
+              }).toList();
 
         // Real feed data wins immediately and clears any timeout banner.
         if (list != null && list.isNotEmpty) {
@@ -347,7 +366,8 @@ class _MemoriesPageState extends State<MemoriesPage> {
       who: p.who ?? fallbackWho,
       where: p.where,
       why: p.why,
-      song: p.song,
+      song: model.songTitle ?? p.song,
+      hasAudio: model.audioPath != null && model.audioPath!.isNotEmpty,
       imageUrl: model.imagePath,
       tags: tags,
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
@@ -365,7 +385,8 @@ class _MemoriesPageState extends State<MemoriesPage> {
         builder: (_) => MusicCaptionsPage(
           caption: p.caption,
           imageUrl: model.imagePath,
-          song: p.song,
+          song: model.songTitle ?? p.song,
+          audioUrl: model.audioPath,
         ),
       )),
     );
@@ -374,12 +395,18 @@ class _MemoriesPageState extends State<MemoriesPage> {
   void _openCalmMode(BuildContext context) {
     final feedState = Provider.of<FeedState>(context, listen: false);
     final authState = Provider.of<AuthState>(context, listen: false);
-    // getTweetList returns null when userModel is null. Fall back to the
-    // raw feedList (already reversed newest-first) so Calm Mode works
-    // even before the profile model has loaded.
-    final List<FeedModel> list = authState.userModel != null
+    final raw = authState.userModel != null
         ? (feedState.getTweetList(authState.userModel) ?? const [])
-        : (feedState.feedList ?? const []);
+        : (feedState.feedList ?? const <FeedModel>[]);
+    final myRecipientId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
+    final list = raw
+        .where((m) =>
+            (m.careRecipientId == null || m.careRecipientId!.isEmpty)
+                ? m.userId == myRecipientId
+                : m.careRecipientId == myRecipientId)
+        .toList();
     final slides = list.map((m) {
       final p = _parse(m);
       return CalmSlide(

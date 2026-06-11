@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
+import 'package:flutter_twitter_clone/services/care_settings_service.dart';
 import 'package:flutter_twitter_clone/services/companion_service.dart';
 import 'package:flutter_twitter_clone/services/snippet_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
@@ -48,11 +51,14 @@ class _CompanionPageState extends State<CompanionPage> {
   final CompanionService _service = CompanionService();
   final SnippetService _snippets = SnippetService();
   final SessionLogService _sessionLogs = SessionLogService();
+  final CareSettingsService _careSettings = CareSettingsService();
 
   late final CompanionPhotoContext _photo;
   late final DateTime _sessionStart;
   bool _awaitingReply = false;
   bool _sessionEnded = false;
+  bool _aiDisabled = false;
+  StreamSubscription<CareSettings>? _settingsSub;
 
   @override
   void initState() {
@@ -71,6 +77,23 @@ class _CompanionPageState extends State<CompanionPage> {
   }
 
   Future<void> _bootstrap() async {
+    // Watch the care recipient's AI toggle. If a caregiver disables it
+    // on another device, the conversation freezes immediately.
+    final authState = Provider.of<AuthState>(context, listen: false);
+    final recipientId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
+    if (recipientId != null) {
+      _settingsSub = _careSettings.watch(recipientId).listen((settings) {
+        if (!mounted) return;
+        setState(() => _aiDisabled = settings.aiDisabled);
+      });
+      final initial = await _careSettings.read(recipientId);
+      if (mounted) setState(() => _aiDisabled = initial.aiDisabled);
+    }
+
+    if (_aiDisabled) return;
+
     setState(() => _awaitingReply = true);
     final opening = await _service.openingPrompt(_photo);
     if (!mounted) return;
@@ -89,6 +112,7 @@ class _CompanionPageState extends State<CompanionPage> {
   ];
 
   Future<void> _send([String? overrideText]) async {
+    if (_aiDisabled) return;
     if (_awaitingReply) return;
     final text = (overrideText ?? _controller.text).trim();
     if (text.isEmpty) return;
@@ -141,8 +165,11 @@ class _CompanionPageState extends State<CompanionPage> {
   /// what's wrong instead of the button silently doing nothing.
   Future<String?> _saveSnippet({bool silent = false}) async {
     final authState = Provider.of<AuthState>(context, listen: false);
-    final userId =
-        authState.userModel?.userId ?? authState.user?.uid;
+    // Snippets and session logs live under the care recipient, so a
+    // caregiver/family member writes into the recipient's bucket.
+    final userId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
     if (userId == null) {
       _toast(
         "You need to be signed in to save a snippet.",
@@ -244,8 +271,9 @@ class _CompanionPageState extends State<CompanionPage> {
     if (_sessionEnded) return;
     _sessionEnded = true;
     final authState = Provider.of<AuthState>(context, listen: false);
-    final userId =
-        authState.userModel?.userId ?? authState.user?.uid;
+    final userId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
     if (userId == null) return;
 
     final history = _messages
@@ -315,6 +343,7 @@ class _CompanionPageState extends State<CompanionPage> {
 
   @override
   void dispose() {
+    _settingsSub?.cancel();
     // Fire-and-forget the session close.
     // ignore: discarded_futures
     _endSession();
@@ -373,29 +402,64 @@ class _CompanionPageState extends State<CompanionPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: Column(
-            children: [
-              _photoStrip(),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scroll,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount:
-                      _messages.length + (_awaitingReply ? 1 : 0),
-                  itemBuilder: (_, i) {
-                    if (i == _messages.length) {
-                      return _bubble(_Message.pending());
-                    }
-                    return _bubble(_messages[i]);
-                  },
+          child: _aiDisabled
+              ? _aiDisabledBody()
+              : Column(
+                  children: [
+                    _photoStrip(),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _scroll,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        itemCount:
+                            _messages.length + (_awaitingReply ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i == _messages.length) {
+                            return _bubble(_Message.pending());
+                          }
+                          return _bubble(_messages[i]);
+                        },
+                      ),
+                    ),
+                    _suggestionStrip(),
+                    _inputBar(),
+                  ],
                 ),
-              ),
-              _suggestionStrip(),
-              _inputBar(),
-            ],
-          ),
         ),
+      ),
+    );
+  }
+
+  Widget _aiDisabledBody() {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: PhotoTalkPalette.accentRose.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.chat_bubble_outline,
+                size: 60, color: PhotoTalkPalette.accentRose),
+          ),
+          const SizedBox(height: 20),
+          Text('The Companion is turned off',
+              textAlign: TextAlign.center, style: PhotoTalkText.h2),
+          const SizedBox(height: 8),
+          Text(
+            "A caregiver or family member has paused AI conversations for now. "
+            "You can still look at photos and play music.",
+            textAlign: TextAlign.center,
+            style: PhotoTalkText.body
+                .copyWith(color: PhotoTalkPalette.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -654,13 +718,34 @@ class CompanionHomePage extends StatelessWidget {
     final feedState = context.watch<FeedState>();
     final authState = context.watch<AuthState>();
 
-    // getTweetList returns null when userModel is null (e.g. when the
-    // profile fetch hasn't completed yet). Fall back to feedList directly
-    // so the Companion tab still shows memories during that window.
-    final List<FeedModel> list = authState.userModel != null
-        ? (feedState.getTweetList(authState.userModel) ?? const [])
-        : (feedState.feedList ?? const []);
+    final raw = authState.userModel != null
+        ? (feedState.getTweetList(authState.userModel) ?? const <FeedModel>[])
+        : (feedState.feedList ?? const <FeedModel>[]);
+    final myRecipientId = authState.userModel?.linkedRecipientId ??
+        authState.userModel?.userId ??
+        authState.user?.uid;
+    final List<FeedModel> list = raw
+        .where((m) =>
+            (m.careRecipientId == null || m.careRecipientId!.isEmpty)
+                ? m.userId == myRecipientId
+                : m.careRecipientId == myRecipientId)
+        .toList();
 
+    // Live AI-disabled flag so this tab updates the moment a caregiver
+    // flips it on another device.
+    return StreamBuilder<CareSettings>(
+      stream: myRecipientId == null
+          ? const Stream<CareSettings>.empty()
+          : CareSettingsService().watch(myRecipientId),
+      builder: (context, snap) {
+        final aiDisabled = (snap.data?.aiDisabled) ?? false;
+        return _buildScaffold(context, list, aiDisabled);
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+      BuildContext context, List<FeedModel> list, bool aiDisabled) {
     return Scaffold(
       backgroundColor: PhotoTalkPalette.background,
       appBar: AppBar(
@@ -676,20 +761,56 @@ class CompanionHomePage extends StatelessWidget {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              _hero(context, firstMemory: list.isNotEmpty ? list.first : null),
-              const SizedBox(height: 24),
-              Text('Recent memories', style: PhotoTalkText.h2),
-              const SizedBox(height: 12),
-              if (list.isEmpty)
-                _emptyHint()
-              else
-                for (final m in list) _recentTile(context, m),
-            ],
-          ),
+          child: aiDisabled
+              ? _aiOffPanel()
+              : ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    _hero(context,
+                        firstMemory: list.isNotEmpty ? list.first : null),
+                    const SizedBox(height: 24),
+                    Text('Recent memories', style: PhotoTalkText.h2),
+                    const SizedBox(height: 12),
+                    if (list.isEmpty)
+                      _emptyHint()
+                    else
+                      for (final m in list) _recentTile(context, m),
+                  ],
+                ),
         ),
+      ),
+    );
+  }
+
+  Widget _aiOffPanel() {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: PhotoTalkPalette.accentRose.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.chat_bubble_outline,
+                size: 60, color: PhotoTalkPalette.accentRose),
+          ),
+          const SizedBox(height: 20),
+          Text('Companion is paused',
+              textAlign: TextAlign.center, style: PhotoTalkText.h2),
+          const SizedBox(height: 8),
+          Text(
+            "AI conversations are turned off right now. The Memories and "
+            "Music + Captions modes still work.",
+            textAlign: TextAlign.center,
+            style: PhotoTalkText.body
+                .copyWith(color: PhotoTalkPalette.textSecondary),
+          ),
+        ],
       ),
     );
   }

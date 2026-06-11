@@ -22,6 +22,18 @@ class UserModel extends Equatable {
   List<String>? followersList;
   List<String>? followingList;
 
+  // PhotoTalk additions ─────────────────────────────────────────────────
+  /// One of: 'care_recipient', 'family', 'caregiver'.
+  String? role;
+
+  /// Short shareable code used by family/caregiver accounts to link to
+  /// a specific care recipient. Set only on care_recipient accounts.
+  String? joinCode;
+
+  /// Care recipient this account is paired with. Set on family /
+  /// caregiver accounts. For care_recipient accounts this equals userId.
+  String? linkedRecipientId;
+
   UserModel(
       {this.email,
       this.userId,
@@ -41,7 +53,10 @@ class UserModel extends Equatable {
       this.isVerified,
       this.fcmToken,
       this.followersList,
-      this.followingList});
+      this.followingList,
+      this.role,
+      this.joinCode,
+      this.linkedRecipientId});
 
   UserModel.fromJson(Map<dynamic, dynamic>? map) {
     if (map == null) {
@@ -65,6 +80,9 @@ class UserModel extends Equatable {
     webSite = map['webSite'];
     fcmToken = map['fcmToken'];
     isVerified = map['isVerified'] ?? false;
+    role = map['role'];
+    joinCode = map['joinCode'];
+    linkedRecipientId = map['linkedRecipientId'];
     if (map['followerList'] != null) {
       followersList = <String>[];
       map['followerList'].forEach((value) {
@@ -100,7 +118,10 @@ class UserModel extends Equatable {
       'isVerified': isVerified ?? false,
       'fcmToken': fcmToken,
       'followerList': followersList,
-      'followingList': followingList
+      'followingList': followingList,
+      'role': role,
+      'joinCode': joinCode,
+      'linkedRecipientId': linkedRecipientId,
     };
   }
 
