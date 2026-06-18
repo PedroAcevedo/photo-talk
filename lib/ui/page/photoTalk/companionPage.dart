@@ -364,9 +364,17 @@ class _CompanionPageState extends State<CompanionPage> {
   @override
   void dispose() {
     _settingsSub?.cancel();
-    // Fire-and-forget the session close.
-    // ignore: discarded_futures
-    _endSession();
+    // Auto-save session + snippet on every exit path (back arrow, swipe
+    // back, navigation, app suspend). We don't await — dispose is sync —
+    // but the inner Firebase writes run on their own zones and finish
+    // even after dispose returns.
+    //
+    // Wrapped so an exception here can't stop the rest of dispose from
+    // tearing down controllers.
+    try {
+      // ignore: discarded_futures
+      _endSession();
+    } catch (_) {}
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
@@ -408,15 +416,9 @@ class _CompanionPageState extends State<CompanionPage> {
                   fontWeight: FontWeight.w600,
                 )),
           ),
-          IconButton(
-            tooltip: "End session gently",
-            onPressed: () async {
-              await _endSession();
-              if (mounted) Navigator.of(context).pop();
-            },
-            icon: const Icon(Icons.pause_circle_outline,
-                color: PhotoTalkPalette.textSecondary),
-          ),
+          // No explicit pause/end button: dispose() runs _endSession() on
+          // every exit path (back arrow, navigation, app suspend), so a
+          // session log + auto-snippet are saved without any user action.
         ],
       ),
       body: Center(

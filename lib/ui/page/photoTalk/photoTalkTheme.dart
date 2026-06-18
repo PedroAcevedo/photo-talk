@@ -1,31 +1,42 @@
 import 'package:flutter/material.dart';
 
-/// PhotoTalk uses a warm, low-contrast, dementia-friendly palette.
-/// Big touch targets, readable text, gentle colors.
+/// PhotoTalk palette — rich teal primary paired with warm coral, gold,
+/// and soft-violet accents. Designed for low cognitive load: high
+/// contrast against the cream background, calm hues for accents.
+///
+/// Field names are kept from the previous warm-terracotta palette so
+/// existing callers compile without changes. The mapping is:
+///   primary       → teal
+///   accentGreen   → muted gold       (used for: calm, success)
+///   accentBlue    → warm coral       (used for: music, secondary call-to-action)
+///   accentLavender→ soft violet      (used for: snippets, family storyline)
+///   accentRose    → deeper rose      (used for: caregiver, alerts)
 class PhotoTalkPalette {
   PhotoTalkPalette._();
 
-  // Warm, calm primary - a soft terracotta/amber that reads well at low vision.
-  static const Color primary = Color(0xFFD98E5C);
-  static const Color primaryDark = Color(0xFFB57043);
+  // Rich teal primary. Sits comfortably against the cream background and
+  // reads as a "trustworthy / calm" hue without being clinical.
+  static const Color primary = Color(0xFF1F6E7E);
+  static const Color primaryDark = Color(0xFF155561);
 
-  // Background: warm off-white that's softer than pure white.
-  static const Color background = Color(0xFFFBF6F0);
+  // Background: warm cream stays — coolness in the primary makes the
+  // background warmth feel inviting rather than competing.
+  static const Color background = Color(0xFFF8F4ED);
   static const Color surface = Color(0xFFFFFFFF);
 
-  // Accents
-  static const Color accentGreen = Color(0xFF6BAA75); // calm/nature
-  static const Color accentBlue = Color(0xFF6B8FAA); // music
-  static const Color accentLavender = Color(0xFFA08BB8); // snippets
-  static const Color accentRose = Color(0xFFC97B8C); // caregiver
+  // Accents (named by historical role; values updated to the new palette)
+  static const Color accentGreen = Color(0xFFD4A24C); // muted gold — calm/success
+  static const Color accentBlue = Color(0xFFE07A5F); // warm coral — music
+  static const Color accentLavender = Color(0xFF9B85C4); // soft violet — snippets
+  static const Color accentRose = Color(0xFFC4596B); // deeper rose — caregiver
 
   // Text
-  static const Color textPrimary = Color(0xFF2C2A28);
-  static const Color textSecondary = Color(0xFF6E6A66);
-  static const Color textMuted = Color(0xFF9C9893);
+  static const Color textPrimary = Color(0xFF1F2E33); // cool near-black so the
+  static const Color textSecondary = Color(0xFF5E6B70); // teal feels grounded
+  static const Color textMuted = Color(0xFF96A0A5);
 
-  // Soft dividers
-  static const Color divider = Color(0xFFE9E1D7);
+  // Soft dividers — a hair of teal in them so they don't read warm.
+  static const Color divider = Color(0xFFE0DCD3);
 }
 
 class PhotoTalkText {
