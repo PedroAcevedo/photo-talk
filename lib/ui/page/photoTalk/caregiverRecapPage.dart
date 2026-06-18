@@ -464,6 +464,34 @@ class _TrendChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxCount =
         buckets.fold<int>(0, (a, b) => b.count > a ? b.count : a);
+    if (maxCount == 0) {
+      // Brand-new account: nothing to plot. Replace the row of dead bars
+      // with a calm placeholder so it doesn't look like the chart broke.
+      return Container(
+        height: 120,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: PhotoTalkPalette.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: PhotoTalkPalette.divider),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.show_chart_rounded,
+                color: PhotoTalkPalette.textMuted, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              'No Companion sessions in the last 7 days yet.',
+              textAlign: TextAlign.center,
+              style: PhotoTalkText.caption
+                  .copyWith(color: PhotoTalkPalette.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
     return SizedBox(
       height: 120,
       child: Row(

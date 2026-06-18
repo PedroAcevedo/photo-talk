@@ -186,6 +186,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _getPage(int index) {
+    // Defense-in-depth: care recipients never see the Caregiver Recap,
+    // even if their AppState.pageIndex somehow lands on 3 (deep link,
+    // stale value after a role change).
+    final auth = Provider.of<AuthState>(context, listen: false);
+    final role = auth.userModel?.role;
+    if (index == 3 && role == 'care_recipient') {
+      index = 0;
+    }
     switch (index) {
       case 0:
         return MemoriesPage(
