@@ -5,34 +5,34 @@ part of '../theme.dart';
 /// values now resolve to the warm PhotoTalk palette so the look is
 /// consistent across the app without restyling every individual file.
 class TwitterColor {
-  // Backgrounds (formerly Twitter white / mystic) now map to the warm
-  // off-white background used everywhere else.
-  static Color white = const Color(0xFFFBF6F0);
-  static Color mystic = const Color(0xFFFBF6F0);
+  // Backgrounds now map to the cream background used by the PhotoTalk
+  // palette so legacy screens blend with the rest of the app.
+  static Color white = const Color(0xFFF8F4ED);
+  static Color mystic = const Color(0xFFF8F4ED);
 
-  // Accent (formerly Twitter blue) now maps to PhotoTalk's warm primary.
-  static Color dodgeBlue = const Color(0xFFD98E5C);
-  static Color dodgeBlue_50 = const Color(0x80D98E5C);
+  // Accent (formerly Twitter blue) now maps to PhotoTalk's teal primary.
+  static Color dodgeBlue = const Color(0xFF1F6E7E);
+  static Color dodgeBlue_50 = const Color(0x801F6E7E);
 
-  // Other legacy values kept for compatibility.
-  static Color bondiBlue = const Color(0xFFB57043);
-  static Color cerulean = const Color(0xFFD98E5C);
-  static Color spindle = const Color(0xFFE9E1D7);
-  static Color black = const Color(0xFF2C2A28);
-  static Color woodsmoke = const Color(0xFF2C2A28);
-  static Color woodsmoke_50 = const Color(0x802C2A28);
-  static Color paleSky = const Color(0xFF6E6A66);
-  static Color ceriseRed = const Color(0xFFC97B8C);
-  static Color paleSky50 = const Color(0x806E6A66);
+  // Other legacy values aligned to the new palette.
+  static Color bondiBlue = const Color(0xFF155561);
+  static Color cerulean = const Color(0xFF1F6E7E);
+  static Color spindle = const Color(0xFFE0DCD3);
+  static Color black = const Color(0xFF1F2E33);
+  static Color woodsmoke = const Color(0xFF1F2E33);
+  static Color woodsmoke_50 = const Color(0x801F2E33);
+  static Color paleSky = const Color(0xFF5E6B70);
+  static Color ceriseRed = const Color(0xFFC4596B);
+  static Color paleSky50 = const Color(0x805E6B70);
 }
 
 class AppColor {
   // Primary/secondary aligned to PhotoTalk theme.
-  static const Color primary = Color(0xFFD98E5C);
-  static const Color secondary = Color(0xFF2C2A28);
-  static const Color darkGrey = Color(0xFF6E6A66);
-  static const Color lightGrey = Color(0xFF9C9893);
-  static const Color extraLightGrey = Color(0xFFE9E1D7);
-  static const Color extraExtraLightGrey = Color(0xFFFBF6F0);
-  static const Color white = Color(0xFFFBF6F0);
+  static const Color primary = Color(0xFF1F6E7E);
+  static const Color secondary = Color(0xFF1F2E33);
+  static const Color darkGrey = Color(0xFF5E6B70);
+  static const Color lightGrey = Color(0xFF96A0A5);
+  static const Color extraLightGrey = Color(0xFFE0DCD3);
+  static const Color extraExtraLightGrey = Color(0xFFF8F4ED);
+  static const Color white = Color(0xFFF8F4ED);
 }

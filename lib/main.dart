@@ -70,8 +70,9 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'PhotoTalk',
         theme: AppTheme.appTheme.copyWith(
-          scaffoldBackgroundColor: const Color(0xFFFBF6F0),
-          primaryColor: const Color(0xFFD98E5C),
+          // Match PhotoTalkPalette.background / .primary.
+          scaffoldBackgroundColor: const Color(0xFFF8F4ED),
+          primaryColor: const Color(0xFF1F6E7E),
           textTheme: GoogleFonts.nunitoTextTheme(
             Theme.of(context).textTheme,
           ),
