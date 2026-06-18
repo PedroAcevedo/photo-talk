@@ -275,8 +275,7 @@ class _MemoryCardState extends State<MemoryCard> {
             );
           },
         ),
-      ),
-    );
+      );
   }
 
   String? _summarizeImageError(Object error) {
