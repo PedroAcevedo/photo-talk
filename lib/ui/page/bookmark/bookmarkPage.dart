@@ -75,6 +75,7 @@ class _BookmarkBody extends StatelessWidget {
       song: m.songTitle,
       hasAudio: m.audioPath != null && m.audioPath!.isNotEmpty,
       imageUrl: m.imagePath,
+      imageUrls: m.imagePaths,
       tags: m.tags ?? const [],
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompanionPage(

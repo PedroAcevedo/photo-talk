@@ -30,6 +30,17 @@ class FeedState extends AppState {
   database.Query? _feedQuery;
   List<FeedModel>? _tweetDetailModelList;
 
+  /// Drop every cached tweet, detail, and the bound database listener.
+  /// Called from the logout flow so the next signed-in user doesn't see
+  /// the previous user's data sitting in memory.
+  void reset() {
+    _feedList = null;
+    _tweetDetailModelList = null;
+    _feedQuery = null; // Listeners attached via .listen are GC'd with the query.
+    isBusy = false;
+    notifyListeners();
+  }
+
   List<FeedModel>? get tweetDetailModel => _tweetDetailModelList;
 
   /// `feedList` always [contain all tweets] fetched from firebase database

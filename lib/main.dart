@@ -21,7 +21,35 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   setupDependencies();
-  runApp(const MyApp());
+  runApp(const AppRestarter(child: MyApp()));
+}
+
+/// Tiny inherited-widget restarter: changing the [Key] passed to the
+/// inner [MyApp] rebuilds the entire app tree from scratch. Every Provider,
+/// every Stream subscription, every cached state is torn down and rebuilt.
+///
+/// We use this for logout so the previously signed-in user can't linger
+/// in memory.
+class AppRestarter extends StatefulWidget {
+  const AppRestarter({Key? key, required this.child}) : super(key: key);
+  final Widget child;
+
+  static void restart(BuildContext context) {
+    context.findAncestorStateOfType<_AppRestarterState>()?._restart();
+  }
+
+  @override
+  State<AppRestarter> createState() => _AppRestarterState();
+}
+
+class _AppRestarterState extends State<AppRestarter> {
+  Key _key = UniqueKey();
+  void _restart() => setState(() => _key = UniqueKey());
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(key: _key, child: widget.child);
+  }
 }
 
 class MyApp extends StatelessWidget {

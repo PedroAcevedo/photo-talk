@@ -124,6 +124,68 @@ Core principles you must follow at all times:
     }
   }
 
+  /// Suggest 3 short, gentle conversation starters that a Companion could
+  /// open with for this photo. Used at upload time so families can preview
+  /// and store prompts on the memory.
+  ///
+  /// Returns an empty list when no key is set or the call fails.
+  Future<List<String>> suggestPrompts(CompanionPhotoContext photo) async {
+    if (!hasApiKey) return _cannedSuggestedPrompts(photo);
+    try {
+      final body = jsonEncode({
+        'model': _model,
+        'temperature': 0.6,
+        'response_format': {'type': 'json_object'},
+        'messages': [
+          {
+            'role': 'system',
+            'content':
+                'You craft 3 short, gentle conversation starters for an AI '
+                    'companion that talks with a person living with dementia '
+                    'about a family photo. Rules: each starter is one short '
+                    'sentence (under 18 words), warm and emotionally focused, '
+                    'no quizzes, no recall pressure, never asks the person to '
+                    'identify or remember anyone or anything. Return JSON: '
+                    '{"prompts": ["...","...","..."] }.'
+          },
+          {
+            'role': 'user',
+            'content': 'Photo context:\n${photo.toPromptContext()}',
+          },
+        ],
+      });
+
+      final response = await _client
+          .post(
+            Uri.parse(_endpoint),
+            headers: {
+              'Authorization': 'Bearer $_apiKey',
+              'Content-Type': 'application/json',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) {
+        return _cannedSuggestedPrompts(photo);
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final content =
+          decoded['choices']?[0]?['message']?['content'] as String?;
+      if (content == null) return _cannedSuggestedPrompts(photo);
+      final parsed = jsonDecode(content) as Map<String, dynamic>;
+      final raw = (parsed['prompts'] as List?) ?? const [];
+      final prompts = raw
+          .map((e) => e.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .take(3)
+          .toList();
+      if (prompts.isEmpty) return _cannedSuggestedPrompts(photo);
+      return prompts;
+    } catch (_) {
+      return _cannedSuggestedPrompts(photo);
+    }
+  }
+
   /// Ask GPT to write a short Story Snippet summary of the conversation.
   /// Returns a map with keys: quote, theme, tone.
   Future<Map<String, String>?> summarizeSnippet({
@@ -244,6 +306,15 @@ Core principles you must follow at all times:
           "What do you notice in this moment?";
     }
     return "What a lovely picture. There's no rush — what stands out to you here?";
+  }
+
+  List<String> _cannedSuggestedPrompts(CompanionPhotoContext photo) {
+    // Keep three gentle, generic openers when no key is configured.
+    return const [
+      "What feels warm or familiar when you look at this picture?",
+      "Is there a sound or smell that this brings to mind?",
+      "How are you feeling as you sit with this photo today?",
+    ];
   }
 
   String _cannedReply(String userText) {

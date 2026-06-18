@@ -29,6 +29,7 @@ class CompanionPage extends StatefulWidget {
     this.why,
     this.song,
     this.tags = const [],
+    this.seededPrompts = const [],
   }) : super(key: key);
 
   final String caption;
@@ -38,6 +39,9 @@ class CompanionPage extends StatefulWidget {
   final String? why;
   final String? song;
   final List<String> tags;
+  /// Optional opener prompts drafted at upload time. The first is used as
+  /// the opening line; remaining ones populate the quick-tap chip strip.
+  final List<String> seededPrompts;
 
   @override
   State<CompanionPage> createState() => _CompanionPageState();
@@ -95,7 +99,14 @@ class _CompanionPageState extends State<CompanionPage> {
     if (_aiDisabled) return;
 
     setState(() => _awaitingReply = true);
-    final opening = await _service.openingPrompt(_photo);
+    // If the family wrote prompts at upload time, use the first as the
+    // opening line and skip the network round-trip. Otherwise ask GPT.
+    String opening;
+    if (widget.seededPrompts.isNotEmpty) {
+      opening = widget.seededPrompts.first;
+    } else {
+      opening = await _service.openingPrompt(_photo);
+    }
     if (!mounted) return;
     setState(() {
       _messages.add(_Message.companion(opening));
@@ -104,12 +115,21 @@ class _CompanionPageState extends State<CompanionPage> {
     _scrollToEnd();
   }
 
-  static const List<String> _gentlePrompts = [
+  static const List<String> _defaultGentlePrompts = [
     "How does this picture make you feel?",
     "What's something you enjoy about it?",
     "Is there a sound or smell you remember?",
     "Would you like to tell me a little about this?",
   ];
+
+  List<String> get _gentlePrompts {
+    // Surface the family's tail of seeded prompts (#2, #3) before falling
+    // back to the generic gentle ones.
+    if (widget.seededPrompts.length > 1) {
+      return [...widget.seededPrompts.skip(1), ..._defaultGentlePrompts];
+    }
+    return _defaultGentlePrompts;
+  }
 
   Future<void> _send([String? overrideText]) async {
     if (_aiDisabled) return;

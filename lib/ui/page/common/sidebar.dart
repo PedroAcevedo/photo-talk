@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/constant.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
-import 'package:flutter_twitter_clone/ui/page/Auth/selectAuthMethod.dart';
+import 'package:flutter_twitter_clone/main.dart';
+import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
 import 'package:flutter_twitter_clone/ui/page/photoTalk/widgets/generic_avatar.dart' as photoTalk_avatar;
@@ -157,17 +158,18 @@ class _SidebarMenuState extends State<SidebarMenu> {
 
   Future<void> _logOut() async {
     final state = Provider.of<AuthState>(context, listen: false);
-    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final feedState = Provider.of<FeedState>(context, listen: false);
+    final rootContext = context;
     // Close the drawer first so it doesn't sit on top of the new route.
     Navigator.pop(context);
+    feedState.reset();
     await state.logoutCallback();
-    if (!rootNavigator.mounted) return;
-    // Wipe the navigation stack and land on Welcome so the user can sign
-    // in as somebody else (or create a fresh account).
-    rootNavigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const WelcomePage()),
-      (route) => false,
-    );
+    if (!rootContext.mounted) return;
+    // Throw away the entire widget tree (and every Provider with it) so
+    // no listener, no cached profile, and no view of the previous user
+    // survives. The fresh tree boots through SplashPage, sees no signed-in
+    // user, and lands on WelcomePage.
+    AppRestarter.restart(rootContext);
   }
 
   void _navigateTo(String path) {

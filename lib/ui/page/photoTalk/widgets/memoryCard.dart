@@ -9,7 +9,7 @@ import '../photoTalkTheme.dart';
 ///   - Short, readable caption
 ///   - Optional who/where/why chips
 ///   - Two oversized action buttons: Talk about it · Play music
-class MemoryCard extends StatelessWidget {
+class MemoryCard extends StatefulWidget {
   const MemoryCard({
     Key? key,
     required this.caption,
@@ -17,6 +17,7 @@ class MemoryCard extends StatelessWidget {
     this.where,
     this.why,
     this.imageUrl,
+    this.imageUrls,
     this.song,
     this.hasAudio = false,
     this.tags = const [],
@@ -29,7 +30,11 @@ class MemoryCard extends StatelessWidget {
   final String? who;
   final String? where;
   final String? why;
+  /// Legacy single-image URL. Used when [imageUrls] is null/empty.
   final String? imageUrl;
+  /// One or more image URLs. When length > 1 the card becomes a swipeable
+  /// carousel with dot indicators.
+  final List<String>? imageUrls;
   final String? song;
   /// True when this memory has an uploaded audio file. Causes the play
   /// button to read "Play music" instead of "Listen".
@@ -39,6 +44,45 @@ class MemoryCard extends StatelessWidget {
   final VoidCallback? onTalk;
   final VoidCallback? onPlayMusic;
   final VoidCallback? onTap;
+
+  @override
+  State<MemoryCard> createState() => _MemoryCardState();
+}
+
+class _MemoryCardState extends State<MemoryCard> {
+  late final PageController _pageCtrl = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _allImages {
+    final list = widget.imageUrls;
+    if (list != null && list.isNotEmpty) {
+      return list.where((u) => u.isNotEmpty).toList();
+    }
+    if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+      return [widget.imageUrl!];
+    }
+    return const [];
+  }
+
+  // ---- forwarders so existing helper methods keep working ----
+  String get caption => widget.caption;
+  String? get who => widget.who;
+  String? get where => widget.where;
+  String? get why => widget.why;
+  String? get song => widget.song;
+  bool get hasAudio => widget.hasAudio;
+  List<String> get tags => widget.tags;
+  VoidCallback? get onTalk => widget.onTalk;
+  VoidCallback? get onPlayMusic => widget.onPlayMusic;
+  VoidCallback? get onTap => widget.onTap;
+  String? get imageUrl =>
+      _allImages.isNotEmpty ? _allImages.first : null;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +141,8 @@ class MemoryCard extends StatelessWidget {
 
   Widget _photo() {
     final radius = const BorderRadius.vertical(top: Radius.circular(20));
-    if (imageUrl == null || imageUrl!.isEmpty) {
+    final images = _allImages;
+    if (images.isEmpty) {
       return ClipRRect(
         borderRadius: radius,
         child: Container(
@@ -111,16 +156,83 @@ class MemoryCard extends StatelessWidget {
         ),
       );
     }
+    if (images.length == 1) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: SizedBox(
+          height: 320,
+          width: double.infinity,
+          child: _networkImage(images.first),
+        ),
+      );
+    }
+    // Multi-photo: swipeable carousel with dots and a counter chip.
     return ClipRRect(
       borderRadius: radius,
       child: SizedBox(
-        // Cap the photo height so the card never grows taller than ~320px
-        // of image on phones and tablets. Keeps caption + actions in view.
         height: 320,
         width: double.infinity,
-        child: Image.network(
-          imageUrl!,
-          fit: BoxFit.cover,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageCtrl,
+              itemCount: images.length,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemBuilder: (_, i) => _networkImage(images[i]),
+            ),
+            Positioned(
+              top: 10,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_page + 1} / ${images.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(images.length, (i) {
+                  final active = i == _page;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: active ? 18 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white60,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _networkImage(String url) {
+    return SizedBox(
+      width: double.infinity,
+      child: Image.network(
+        url,
+        fit: BoxFit.cover,
           loadingBuilder: (context, child, progress) {
             if (progress == null) return child;
             return Container(

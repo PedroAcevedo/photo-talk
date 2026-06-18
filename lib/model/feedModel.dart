@@ -29,6 +29,13 @@ class FeedModel {
   /// PhotoTalk: optional human-readable song title separate from the
   /// audio URL.
   String? songTitle;
+  /// PhotoTalk: multi-photo support. When a memory carries more than one
+  /// image the URLs live here. [imagePath] is kept as the first entry so
+  /// older code paths (and legacy data) still resolve.
+  List<String>? imagePaths;
+  /// PhotoTalk: gentle conversation starters drafted by GPT during the
+  /// upload step. The Companion uses them as opener seeds.
+  List<String>? prompts;
   FeedModel(
       {this.key,
       this.description,
@@ -47,7 +54,9 @@ class FeedModel {
       this.childRetwetkey,
       this.careRecipientId,
       this.audioPath,
-      this.songTitle});
+      this.songTitle,
+      this.imagePaths,
+      this.prompts});
   toJson() {
     return {
       "userId": userId,
@@ -67,6 +76,8 @@ class FeedModel {
       "careRecipientId": careRecipientId,
       "audioPath": audioPath,
       "songTitle": songTitle,
+      "imagePaths": imagePaths,
+      "prompts": prompts,
     };
   }
 
@@ -87,6 +98,27 @@ class FeedModel {
     careRecipientId = map['careRecipientId'];
     audioPath = map['audioPath'];
     songTitle = map['songTitle'];
+    if (map['imagePaths'] != null) {
+      imagePaths = <String>[];
+      map['imagePaths'].forEach((value) {
+        if (value is String && value.isNotEmpty) imagePaths!.add(value);
+      });
+    }
+    // Back-compat: legacy memories only have imagePath. Surface it as the
+    // single entry of imagePaths so newer UI doesn't have to special-case.
+    if ((imagePaths == null || imagePaths!.isEmpty) &&
+        imagePath != null &&
+        imagePath!.isNotEmpty) {
+      imagePaths = [imagePath!];
+    }
+    if (map['prompts'] != null) {
+      prompts = <String>[];
+      map['prompts'].forEach((value) {
+        if (value is String && value.trim().isNotEmpty) {
+          prompts!.add(value.toString());
+        }
+      });
+    }
     if (map['tags'] != null) {
       tags = <String>[];
       map['tags'].forEach((value) {

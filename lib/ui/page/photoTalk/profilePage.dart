@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_clone/main.dart';
 import 'package:flutter_twitter_clone/services/care_settings_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
-import 'package:flutter_twitter_clone/ui/page/Auth/selectAuthMethod.dart';
+import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:provider/provider.dart';
 
 import 'photoTalkTheme.dart';
@@ -299,15 +300,16 @@ class PhotoTalkProfilePage extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: () async {
           final state = Provider.of<AuthState>(context, listen: false);
-          final navigator = Navigator.of(context);
+          final feedState = Provider.of<FeedState>(context, listen: false);
+          // Drop cached feed before we sign out so the next user (or the
+          // signed-out screen) never reads the previous user's data.
+          feedState.reset();
           await state.logoutCallback();
-          if (!navigator.mounted) return;
-          // Wipe the whole stack and land on the welcome screen so the
-          // user can't go "back" into the now-empty home page.
-          navigator.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const WelcomePage()),
-            (route) => false,
-          );
+          if (!context.mounted) return;
+          // Rebuild the whole app tree so every Provider is fresh and
+          // SplashPage re-checks Firebase Auth. Nothing from the old
+          // session survives.
+          AppRestarter.restart(context);
         },
         icon: const Icon(Icons.logout_rounded),
         label: const Text('Sign out',

@@ -369,6 +369,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
       song: model.songTitle ?? p.song,
       hasAudio: model.audioPath != null && model.audioPath!.isNotEmpty,
       imageUrl: model.imagePath,
+      imageUrls: model.imagePaths,
       tags: tags,
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompanionPage(
@@ -379,6 +380,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
           why: p.why,
           song: p.song,
           tags: tags,
+          seededPrompts: model.prompts ?? const [],
         ),
       )),
       onPlayMusic: () => Navigator.of(context).push(MaterialPageRoute(

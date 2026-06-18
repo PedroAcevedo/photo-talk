@@ -109,6 +109,30 @@ class _CaregiverRecapPageState extends State<CaregiverRecapPage> {
                   ),
                   const SizedBox(height: 16),
                   _section(
+                    title: 'Activity over the last 7 days',
+                    children: [
+                      _TrendChart(buckets: d.weekBuckets),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Sessions per day. Tap a memory in Today\'s Memories to start one.',
+                        style: PhotoTalkText.caption,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _section(
+                    title: 'Topics to soften',
+                    children: d.topicsToSoften.isEmpty
+                        ? [
+                            _placeholder(
+                                'No topics flagged from recent sessions.')
+                          ]
+                        : d.topicsToSoften
+                            .map((t) => _SoftenItem(t))
+                            .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _section(
                     title: 'New snippets captured',
                     children: d.snippets.isEmpty
                         ? [_placeholder('No snippets yet today.')]
@@ -372,5 +396,147 @@ class _RecapData {
     final list = [...todaySessions];
     list.sort((a, b) => b.turnCount.compareTo(a.turnCount));
     return list.take(3).toList();
+  }
+
+  /// Last 7 days of session counts (index 0 = today, 6 = six days ago).
+  /// Counts only sessions where the person actually engaged (turnCount > 0)
+  /// so an accidental open doesn't inflate the chart.
+  List<_DayBucket> get weekBuckets {
+    final now = DateTime.now().toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    final buckets = List.generate(7, (i) {
+      final day = today.subtract(Duration(days: i));
+      return _DayBucket(day: day, count: 0);
+    });
+    for (final s in sessions) {
+      try {
+        final d = DateTime.parse(s.startedAt).toLocal();
+        final day = DateTime(d.year, d.month, d.day);
+        final offset = today.difference(day).inDays;
+        if (offset >= 0 && offset < 7 && s.turnCount > 0) {
+          buckets[offset] = buckets[offset].increment();
+        }
+      } catch (_) {
+        // ignore malformed timestamps
+      }
+    }
+    // Oldest on the left → newest on the right (chart reads naturally).
+    return buckets.reversed.toList();
+  }
+
+  /// Photo captions whose recent sessions skewed mixed or distressing.
+  /// Heuristic: tone == 'Mixed' OR (turnCount low AND duration short).
+  List<String> get topicsToSoften {
+    final flagged = <String>{};
+    for (final s in sessions) {
+      final caption = s.photoCaption.trim();
+      if (caption.isEmpty) continue;
+      final tone = (s.tone ?? '').toLowerCase();
+      final shortAndQuiet = s.turnCount > 0 &&
+          s.turnCount <= 2 &&
+          s.durationSeconds <= 60;
+      if (tone == 'mixed' || shortAndQuiet) {
+        flagged.add(caption);
+      }
+      if (flagged.length >= 3) break;
+    }
+    return flagged.toList();
+  }
+}
+
+class _DayBucket {
+  final DateTime day;
+  final int count;
+  const _DayBucket({required this.day, required this.count});
+  _DayBucket increment() => _DayBucket(day: day, count: count + 1);
+
+  String get shortLabel {
+    const labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    return labels[day.weekday - 1];
+  }
+}
+
+class _TrendChart extends StatelessWidget {
+  const _TrendChart({required this.buckets});
+  final List<_DayBucket> buckets;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxCount =
+        buckets.fold<int>(0, (a, b) => b.count > a ? b.count : a);
+    return SizedBox(
+      height: 120,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: buckets.map((b) {
+          final fraction = maxCount == 0 ? 0.0 : b.count / maxCount;
+          final isToday =
+              b.day.day == DateTime.now().day && b.day.month == DateTime.now().month;
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Bar.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: fraction == 0 ? 0.04 : fraction,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: b.count == 0
+                                ? PhotoTalkPalette.divider
+                                : (isToday
+                                    ? PhotoTalkPalette.primary
+                                    : PhotoTalkPalette.accentBlue),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Count above the day label so caregivers can read at a glance.
+                  Text('${b.count}',
+                      style: PhotoTalkText.caption
+                          .copyWith(fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(b.shortLabel,
+                      style: PhotoTalkText.caption.copyWith(fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _SoftenItem extends StatelessWidget {
+  const _SoftenItem(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline,
+              color: PhotoTalkPalette.accentRose),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: PhotoTalkText.body,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
