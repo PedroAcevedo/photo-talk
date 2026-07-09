@@ -4,6 +4,7 @@ import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/main.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/ui/page/bookmark/bookmarkPage.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/familyStorylinePage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/profilePage.dart' as photoTalk;
 import 'package:flutter_twitter_clone/ui/page/photoTalk/widgets/generic_avatar.dart' as photoTalk_avatar;
 import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
@@ -213,8 +214,16 @@ class _SidebarMenuState extends State<SidebarMenu> {
                       Navigator.push(context, BookmarkPage.getRoute());
                     },
                   ),
-                  _menuListRowButton('Family storyline',
-                      icon: AppIcon.lists, isEnable: true),
+                  _menuListRowButton(
+                    'Family storyline',
+                    icon: AppIcon.lists,
+                    isEnable: true,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.of(context)
+                          .push(FamilyStorylinePage.getRoute());
+                    },
+                  ),
                   _menuListRowButton('Story snippets',
                       icon: AppIcon.moments, isEnable: true),
                   const Divider(),

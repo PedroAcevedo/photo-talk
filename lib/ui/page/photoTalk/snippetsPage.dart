@@ -4,6 +4,7 @@ import 'package:flutter_twitter_clone/services/snippet_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:provider/provider.dart';
 
+import 'familyStorylinePage.dart';
 import 'photoTalkTheme.dart';
 
 /// Family Story Snippets — short reflections captured from Companion
@@ -469,9 +470,7 @@ class _SnippetsPageState extends State<SnippetsPage> {
           const SizedBox(height: 12),
           OutlinedButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Coming soon')),
-              );
+              Navigator.of(context).push(FamilyStorylinePage.getRoute());
             },
             style: OutlinedButton.styleFrom(
               foregroundColor: PhotoTalkPalette.accentLavender,
