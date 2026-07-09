@@ -56,6 +56,15 @@
           ".write": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))"
         }
       }
+    },
+
+    "voiceNotes": {
+      "$recipientId": {
+        ".read": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))",
+        "$memoryKey": {
+          ".write": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))"
+        }
+      }
     }
   }
 }

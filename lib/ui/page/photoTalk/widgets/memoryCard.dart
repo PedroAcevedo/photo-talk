@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/material.dart';
 
 import '../photoTalkTheme.dart';
@@ -26,6 +27,8 @@ class MemoryCard extends StatefulWidget {
     this.onTap,
     this.isFavorite = false,
     this.onFavoriteToggle,
+    this.voiceNoteUrl,
+    this.voiceNoteDurationSeconds,
   }) : super(key: key);
 
   final String caption;
@@ -51,6 +54,11 @@ class MemoryCard extends StatefulWidget {
   final bool isFavorite;
   /// Called when the heart is tapped. When null the heart is hidden.
   final VoidCallback? onFavoriteToggle;
+  /// A short spoken message attached to this memory. Played inline via a
+  /// compact player row.
+  final String? voiceNoteUrl;
+  /// Voice-note length in seconds (persisted at upload).
+  final int? voiceNoteDurationSeconds;
 
   @override
   State<MemoryCard> createState() => _MemoryCardState();
@@ -60,9 +68,47 @@ class _MemoryCardState extends State<MemoryCard> {
   late final PageController _pageCtrl = PageController();
   int _page = 0;
 
+  // Voice-note inline playback.
+  final ap.AudioPlayer _voicePlayer = ap.AudioPlayer();
+  ap.PlayerState _voiceState = ap.PlayerState.stopped;
+  Duration _voicePos = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _voicePlayer.onPlayerStateChanged.listen((s) {
+      if (mounted) setState(() => _voiceState = s);
+    });
+    _voicePlayer.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _voicePos = p);
+    });
+    _voicePlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _voicePos = Duration.zero);
+    });
+  }
+
+  bool get _hasVoiceNote =>
+      widget.voiceNoteUrl != null && widget.voiceNoteUrl!.isNotEmpty;
+
+  Future<void> _toggleVoiceNote() async {
+    if (!_hasVoiceNote) return;
+    try {
+      if (_voiceState == ap.PlayerState.playing) {
+        await _voicePlayer.pause();
+      } else if (_voiceState == ap.PlayerState.paused) {
+        await _voicePlayer.resume();
+      } else {
+        await _voicePlayer.play(ap.UrlSource(widget.voiceNoteUrl!));
+      }
+    } catch (_) {
+      // Playback errors are non-fatal; the card just goes back to idle.
+    }
+  }
+
   @override
   void dispose() {
     _pageCtrl.dispose();
+    _voicePlayer.dispose();
     super.dispose();
   }
 
@@ -139,6 +185,7 @@ class _MemoryCardState extends State<MemoryCard> {
                     ],
                   ),
                 ),
+              if (_hasVoiceNote) _voiceNoteRow(),
               const Divider(height: 1, color: PhotoTalkPalette.divider),
               _actions(context),
             ],
@@ -386,6 +433,70 @@ class _MemoryCardState extends State<MemoryCard> {
           const SizedBox(width: 6),
           Text(label, style: PhotoTalkText.chip),
         ],
+      ),
+    );
+  }
+
+  Widget _voiceNoteRow() {
+    final isPlaying = _voiceState == ap.PlayerState.playing;
+    final total = widget.voiceNoteDurationSeconds ?? 0;
+    final progress = total > 0
+        ? (_voicePos.inSeconds / total).clamp(0.0, 1.0)
+        : 0.0;
+    String fmt(int sec) {
+      final m = (sec ~/ 60).toString().padLeft(2, '0');
+      final s = (sec % 60).toString().padLeft(2, '0');
+      return '$m:$s';
+    }
+
+    final elapsed = fmt(_voicePos.inSeconds);
+    final durationText = total > 0 ? fmt(total) : '--:--';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: PhotoTalkPalette.accentBlue.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border:
+              Border.all(color: PhotoTalkPalette.accentBlue.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: _toggleVoiceNote,
+              iconSize: 32,
+              color: PhotoTalkPalette.accentBlue,
+              icon: Icon(isPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_fill),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Voice note from family',
+                      style: PhotoTalkText.body
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      minHeight: 5,
+                      value: progress,
+                      backgroundColor: PhotoTalkPalette.divider,
+                      valueColor: const AlwaysStoppedAnimation(
+                          PhotoTalkPalette.accentBlue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('$elapsed / $durationText',
+                style: PhotoTalkText.caption.copyWith(fontSize: 12)),
+          ],
+        ),
       ),
     );
   }

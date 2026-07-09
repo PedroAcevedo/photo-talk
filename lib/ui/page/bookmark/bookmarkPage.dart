@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/services/favorites_service.dart';
+import 'package:flutter_twitter_clone/services/voice_note_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/companionPage.dart';
@@ -28,6 +29,7 @@ class BookmarkPage extends StatefulWidget {
 
 class _BookmarkPageState extends State<BookmarkPage> {
   final FavoritesService _favorites = FavoritesService();
+  final VoiceNoteService _voiceNotes = VoiceNoteService();
 
   @override
   Widget build(BuildContext context) {
@@ -77,21 +79,33 @@ class _BookmarkPageState extends State<BookmarkPage> {
                     "we couldn't load them from the feed yet. Pull to refresh.",
                   );
                 }
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 680),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: memories.length,
-                      itemBuilder: (_, i) => _cardFor(
-                        context,
-                        memories[i],
-                        recipientId: recipientId,
-                        currentUid:
-                            auth.user?.uid ?? auth.userModel?.userId ?? '',
+                // Nested watch: voice-note metadata lives at
+                // /voiceNotes/{recipientId}/{memoryKey}. This stream also
+                // reacts to add/remove/update in real time.
+                return StreamBuilder<Map<String, VoiceNoteEntry>>(
+                  stream: _voiceNotes.watch(recipientId),
+                  builder: (context, vnSnap) {
+                    final voiceNoteByKey =
+                        vnSnap.data ?? const <String, VoiceNoteEntry>{};
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 680),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: memories.length,
+                          itemBuilder: (_, i) => _cardFor(
+                            context,
+                            memories[i],
+                            recipientId: recipientId,
+                            currentUid: auth.user?.uid ??
+                                auth.userModel?.userId ??
+                                '',
+                            voiceNoteByKey: voiceNoteByKey,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 );
               },
             ),
@@ -103,7 +117,9 @@ class _BookmarkPageState extends State<BookmarkPage> {
     FeedModel m, {
     required String recipientId,
     required String currentUid,
+    required Map<String, VoiceNoteEntry> voiceNoteByKey,
   }) {
+    final scopedNote = m.key == null ? null : voiceNoteByKey[m.key];
     final desc = m.description ?? '';
     final caption =
         desc.trim().isEmpty ? 'A saved memory' : desc.split('\n').first;
@@ -126,6 +142,11 @@ class _BookmarkPageState extends State<BookmarkPage> {
       imageUrl: m.imagePath,
       imageUrls: m.imagePaths,
       tags: m.tags ?? const [],
+      // Prefer the scoped /voiceNotes entry; keep the legacy FeedModel
+      // fields as fallback for memories written before the split.
+      voiceNoteUrl: scopedNote?.url ?? m.voiceNotePath,
+      voiceNoteDurationSeconds:
+          scopedNote?.durationSeconds ?? m.voiceNoteDurationSeconds,
       isFavorite: true, // always true on this tab
       onFavoriteToggle: () async {
         if (m.key == null) return;

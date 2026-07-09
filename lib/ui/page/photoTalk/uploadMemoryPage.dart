@@ -9,6 +9,7 @@ import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/model/user.dart';
 import 'package:flutter_twitter_clone/services/companion_service.dart';
+import 'package:flutter_twitter_clone/services/voice_note_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,6 +18,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'photoTalkTheme.dart';
+import 'widgets/voice_note_recorder.dart';
 
 /// "Upload a memory" - the PhotoTalk replacement for compose-tweet.
 ///
@@ -44,6 +46,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
   final _why = TextEditingController();
   final _song = TextEditingController();
   final _mediaLink = TextEditingController();
+  RecordedVoiceNote? _voiceNote;
   bool _submitting = false;
   // AI prompt suggestions. Once the family asks for suggestions, we keep
   // them here and persist them with the memory.
@@ -334,10 +337,48 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       model.externalMediaUrl = looksLikeUrl ? link : 'https://$link';
     }
 
+    // Write the tweet first so we have a stable memoryKey for the voice
+    // note metadata below.
     final db = FirebaseDatabase.instance.ref();
     final newRef = db.child('tweet').push();
     await newRef.set(model.toJson());
     model.key = newRef.key;
+
+    // Voice note — kept out of the /tweet record entirely and stored
+    // under the care-recipient's scoped path:
+    //   Storage: voiceNotes/{recipientId}/{filename}
+    //   RTDB:    /voiceNotes/{recipientId}/{memoryKey}
+    // Both are gated by rules to care-circle membership. The
+    // careRecipientId already set on the model is our source of truth.
+    final recipientForVoiceNote = model.careRecipientId;
+    if (_voiceNote != null &&
+        _voiceNote!.bytes.isNotEmpty &&
+        recipientForVoiceNote != null &&
+        recipientForVoiceNote.isNotEmpty &&
+        model.key != null) {
+      final n = _voiceNote!;
+      final safeRecipient = recipientForVoiceNote
+          .replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      final filename =
+          '${DateTime.now().toIso8601String().replaceAll(':', '-')}_note.${n.extension}';
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('voiceNotes')
+          .child(safeRecipient)
+          .child(filename);
+      await storageRef.putData(
+        n.bytes,
+        SettableMetadata(contentType: n.mime),
+      );
+      final downloadUrl = await storageRef.getDownloadURL();
+      await VoiceNoteService().save(
+        recipientId: recipientForVoiceNote,
+        memoryKey: model.key!,
+        url: downloadUrl,
+        durationSeconds: n.durationSeconds,
+        uploadedByUid: model.userId,
+      );
+    }
   }
 
   String _guessAudioMime(String filename) {
@@ -433,6 +474,11 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
               ),
               const SizedBox(height: 12),
               _suggestedPromptsBlock(),
+              const SizedBox(height: 12),
+              VoiceNoteRecorder(
+                onRecorded: (note) =>
+                    setState(() => _voiceNote = note),
+              ),
               const SizedBox(height: 12),
               _audioNotePlaceholder(),
             ],

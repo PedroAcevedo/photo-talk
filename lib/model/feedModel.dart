@@ -34,6 +34,13 @@ class FeedModel {
   /// Music + Captions mode. Used when the family doesn't want to (or
   /// can't) upload an audio file.
   String? externalMediaUrl;
+  /// PhotoTalk: a short spoken message from a family member, separate
+  /// from the song/music track. Meant to play alongside the memory on
+  /// the feed card.
+  String? voiceNotePath;
+  /// PhotoTalk: length of the voice note in seconds. Persisted so the
+  /// player can render a duration label without waiting to decode.
+  int? voiceNoteDurationSeconds;
   /// PhotoTalk: multi-photo support. When a memory carries more than one
   /// image the URLs live here. [imagePath] is kept as the first entry so
   /// older code paths (and legacy data) still resolve.
@@ -62,7 +69,9 @@ class FeedModel {
       this.songTitle,
       this.imagePaths,
       this.prompts,
-      this.externalMediaUrl});
+      this.externalMediaUrl,
+      this.voiceNotePath,
+      this.voiceNoteDurationSeconds});
   toJson() {
     return {
       "userId": userId,
@@ -85,6 +94,8 @@ class FeedModel {
       "imagePaths": imagePaths,
       "prompts": prompts,
       "externalMediaUrl": externalMediaUrl,
+      "voiceNotePath": voiceNotePath,
+      "voiceNoteDurationSeconds": voiceNoteDurationSeconds,
     };
   }
 
@@ -106,6 +117,13 @@ class FeedModel {
     audioPath = map['audioPath'];
     songTitle = map['songTitle'];
     externalMediaUrl = map['externalMediaUrl'];
+    voiceNotePath = map['voiceNotePath'];
+    final rawDur = map['voiceNoteDurationSeconds'];
+    if (rawDur is int) {
+      voiceNoteDurationSeconds = rawDur;
+    } else if (rawDur != null) {
+      voiceNoteDurationSeconds = int.tryParse(rawDur.toString());
+    }
     if (map['imagePaths'] != null) {
       imagePaths = <String>[];
       map['imagePaths'].forEach((value) {

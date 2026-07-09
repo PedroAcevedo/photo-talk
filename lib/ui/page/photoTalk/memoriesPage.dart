@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/services/favorites_service.dart';
+import 'package:flutter_twitter_clone/services/voice_note_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +42,10 @@ class _MemoriesPageState extends State<MemoriesPage> {
   StreamSubscription<Set<String>>? _favoritesSub;
   Set<String> _favoriteKeys = const {};
 
+  final VoiceNoteService _voiceNotes = VoiceNoteService();
+  StreamSubscription<Map<String, VoiceNoteEntry>>? _voiceNotesSub;
+  Map<String, VoiceNoteEntry> _voiceNoteByKey = const {};
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +65,10 @@ class _MemoriesPageState extends State<MemoriesPage> {
     _favoritesSub?.cancel();
     _favoritesSub = _favorites.watchKeys(recipientId).listen((keys) {
       if (mounted) setState(() => _favoriteKeys = keys);
+    });
+    _voiceNotesSub?.cancel();
+    _voiceNotesSub = _voiceNotes.watch(recipientId).listen((map) {
+      if (mounted) setState(() => _voiceNoteByKey = map);
     });
   }
 
@@ -98,6 +107,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
   @override
   void dispose() {
     _favoritesSub?.cancel();
+    _voiceNotesSub?.cancel();
     _loadingTimeout?.cancel();
     super.dispose();
   }
@@ -428,6 +438,13 @@ class _MemoriesPageState extends State<MemoriesPage> {
           model.key != null && _favoriteKeys.contains(model.key),
       onFavoriteToggle:
           model.key == null ? null : () => _toggleFavorite(model),
+      // Scoped voice-note lookup wins; fall back to any legacy field on
+      // pre-scoped memories so old data keeps rendering.
+      voiceNoteUrl:
+          _voiceNoteByKey[model.key]?.url ?? model.voiceNotePath,
+      voiceNoteDurationSeconds:
+          _voiceNoteByKey[model.key]?.durationSeconds ??
+              model.voiceNoteDurationSeconds,
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompanionPage(
           caption: p.caption,
