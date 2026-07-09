@@ -6,6 +6,7 @@ import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/services/care_settings_service.dart';
 import 'package:flutter_twitter_clone/services/companion_service.dart';
 import 'package:flutter_twitter_clone/services/snippet_service.dart';
+import 'package:flutter_twitter_clone/services/voice_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:provider/provider.dart';
@@ -56,13 +57,18 @@ class _CompanionPageState extends State<CompanionPage> {
   final SnippetService _snippets = SnippetService();
   final SessionLogService _sessionLogs = SessionLogService();
   final CareSettingsService _careSettings = CareSettingsService();
+  final VoiceService _voice = VoiceService();
 
   late final CompanionPhotoContext _photo;
   late final DateTime _sessionStart;
   bool _awaitingReply = false;
   bool _sessionEnded = false;
   bool _aiDisabled = false;
+  bool _voiceInputEnabled = true;
+  bool _voiceOutputEnabled = true;
+  bool _listening = false;
   StreamSubscription<CareSettings>? _settingsSub;
+  StreamSubscription<VoiceRecognition>? _voiceSub;
 
   @override
   void initState() {
@@ -90,10 +96,25 @@ class _CompanionPageState extends State<CompanionPage> {
     if (recipientId != null) {
       _settingsSub = _careSettings.watch(recipientId).listen((settings) {
         if (!mounted) return;
-        setState(() => _aiDisabled = settings.aiDisabled);
+        setState(() {
+          _aiDisabled = settings.aiDisabled;
+          _voiceInputEnabled = settings.voiceInputEnabled;
+          _voiceOutputEnabled = settings.voiceOutputEnabled;
+        });
+        // If voice output was turned off mid-utterance, cut the audio.
+        if (!settings.voiceOutputEnabled) _voice.stopSpeaking();
       });
       final initial = await _careSettings.read(recipientId);
-      if (mounted) setState(() => _aiDisabled = initial.aiDisabled);
+      if (mounted) {
+        setState(() {
+          _aiDisabled = initial.aiDisabled;
+          _voiceInputEnabled = initial.voiceInputEnabled;
+          _voiceOutputEnabled = initial.voiceOutputEnabled;
+        });
+      }
+      // Warm up the recognizer so the mic tap responds instantly.
+      // ignore: unawaited_futures
+      _voice.initSpeech();
     }
 
     if (_aiDisabled) return;
@@ -113,6 +134,7 @@ class _CompanionPageState extends State<CompanionPage> {
       _awaitingReply = false;
     });
     _scrollToEnd();
+    _speakIfEnabled(opening);
   }
 
   static const List<String> _defaultGentlePrompts = [
@@ -165,6 +187,81 @@ class _CompanionPageState extends State<CompanionPage> {
       _awaitingReply = false;
     });
     _scrollToEnd();
+    _speakIfEnabled(reply);
+  }
+
+  Future<void> _speakIfEnabled(String text) async {
+    if (!_voiceOutputEnabled) return;
+    try {
+      await _voice.speak(text);
+    } catch (_) {
+      // Voice out is best-effort; the text bubble is always visible.
+    }
+  }
+
+  Future<void> _toggleMic() async {
+    if (_aiDisabled || _awaitingReply) return;
+    if (_listening) {
+      await _voice.stopListening();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    // Kill any in-flight TTS before turning the mic on, otherwise the
+    // recognizer picks up the Companion's own voice.
+    await _voice.stopSpeaking();
+    try {
+      final ready = await _voice.initSpeech();
+      if (!ready) {
+        _showVoiceUnavailable(
+            "Microphone permission is needed for voice input.");
+        return;
+      }
+      setState(() => _listening = true);
+      _voiceSub?.cancel();
+      _voiceSub = _voice.listen().listen(
+        (rec) {
+          if (!mounted) return;
+          // Show live transcription in the input field so the user can
+          // see they're being heard.
+          _controller
+            ..text = rec.transcript
+            ..selection = TextSelection.collapsed(
+                offset: rec.transcript.length);
+          if (rec.isFinal) {
+            setState(() => _listening = false);
+            if (rec.transcript.trim().isNotEmpty) {
+              _send(rec.transcript);
+            }
+          }
+        },
+        onError: (err) {
+          if (!mounted) return;
+          setState(() => _listening = false);
+          if (err is VoiceUnavailable) {
+            _showVoiceUnavailable(err.message);
+          } else {
+            _showVoiceUnavailable("Couldn't hear you clearly. Try again.");
+          }
+        },
+        onDone: () {
+          if (mounted) setState(() => _listening = false);
+        },
+      );
+    } catch (_) {
+      if (mounted) setState(() => _listening = false);
+      _showVoiceUnavailable("Voice input isn't available right now.");
+    }
+  }
+
+  void _showVoiceUnavailable(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: PhotoTalkPalette.accentRose,
+        duration: const Duration(seconds: 4),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+      ),
+    );
   }
 
   void _scrollToEnd() {
@@ -364,6 +461,11 @@ class _CompanionPageState extends State<CompanionPage> {
   @override
   void dispose() {
     _settingsSub?.cancel();
+    _voiceSub?.cancel();
+    // Best-effort tear-down of the recognizer + TTS so no audio leaks
+    // into the next screen.
+    // ignore: discarded_futures
+    _voice.dispose();
     // Auto-save session + snippet on every exit path (back arrow, swipe
     // back, navigation, app suspend). We don't await — dispose is sync —
     // but the inner Firebase writes run on their own zones and finish
@@ -444,6 +546,7 @@ class _CompanionPageState extends State<CompanionPage> {
                         },
                       ),
                     ),
+                    if (_listening) _listeningBanner(),
                     _suggestionStrip(),
                     _inputBar(),
                   ],
@@ -577,6 +680,54 @@ class _CompanionPageState extends State<CompanionPage> {
     );
   }
 
+  Widget _listeningBanner() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: PhotoTalkPalette.primary.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: PhotoTalkPalette.primary.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: PhotoTalkPalette.accentRose,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _controller.text.isEmpty
+                    ? "Listening… speak whenever you're ready."
+                    : "Listening…",
+                style: PhotoTalkText.body
+                    .copyWith(color: PhotoTalkPalette.textPrimary),
+              ),
+            ),
+            TextButton(
+              onPressed: _toggleMic,
+              style: TextButton.styleFrom(
+                foregroundColor: PhotoTalkPalette.primary,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Stop',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _suggestionStrip() {
     return SizedBox(
       height: 48,
@@ -604,19 +755,19 @@ class _CompanionPageState extends State<CompanionPage> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Row(
           children: [
-            IconButton(
-              iconSize: 32,
-              color: PhotoTalkPalette.primary,
-              icon: const Icon(Icons.mic_none_rounded),
-              onPressed: () {
-                // Placeholder for voice input.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Voice input is coming soon.'),
-                  ),
-                );
-              },
-            ),
+            if (_voiceInputEnabled)
+              IconButton(
+                iconSize: 32,
+                tooltip:
+                    _listening ? 'Stop listening' : 'Tap and speak',
+                color: _listening
+                    ? PhotoTalkPalette.accentRose
+                    : PhotoTalkPalette.primary,
+                icon: Icon(_listening
+                    ? Icons.mic_rounded
+                    : Icons.mic_none_rounded),
+                onPressed: _aiDisabled ? null : _toggleMic,
+              ),
             Expanded(
               child: TextField(
                 controller: _controller,

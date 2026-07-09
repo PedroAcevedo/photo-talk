@@ -131,55 +131,96 @@ class PhotoTalkProfilePage extends StatelessWidget {
                 style: PhotoTalkText.caption,
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(Icons.chat_bubble_outline,
-                      color: PhotoTalkPalette.textSecondary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          settings.aiDisabled
-                              ? 'AI Companion is off'
-                              : 'AI Companion is on',
-                          style: PhotoTalkText.body
-                              .copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          settings.aiDisabled
-                              ? "The 'Talk about it' button is paused."
-                              : 'Conversations are available from any memory.',
-                          style: PhotoTalkText.caption,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: !settings.aiDisabled,
-                    activeColor: PhotoTalkPalette.primary,
-                    onChanged: (on) async {
-                      try {
-                        await service.setAiDisabled(recipientId, !on);
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: PhotoTalkPalette.accentRose,
-                            content: Text("Couldn't change setting: $e",
-                                style: const TextStyle(color: Colors.white)),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
+              _settingRow(
+                context: context,
+                icon: Icons.chat_bubble_outline,
+                title: settings.aiDisabled
+                    ? 'AI Companion is off'
+                    : 'AI Companion is on',
+                subtitle: settings.aiDisabled
+                    ? "The 'Talk about it' button is paused."
+                    : 'Conversations are available from any memory.',
+                value: !settings.aiDisabled,
+                onChanged: (on) =>
+                    service.setAiDisabled(recipientId, !on),
+              ),
+              const Divider(height: 24),
+              _settingRow(
+                context: context,
+                icon: Icons.mic_none_rounded,
+                title: settings.voiceInputEnabled
+                    ? 'Voice input is on'
+                    : 'Voice input is off',
+                subtitle: settings.voiceInputEnabled
+                    ? 'A mic button appears in the Companion.'
+                    : 'The Companion accepts typing only.',
+                value: settings.voiceInputEnabled,
+                onChanged: (on) =>
+                    service.setVoiceInputEnabled(recipientId, on),
+              ),
+              const Divider(height: 24),
+              _settingRow(
+                context: context,
+                icon: Icons.volume_up_outlined,
+                title: settings.voiceOutputEnabled
+                    ? 'Companion voice is on'
+                    : 'Companion voice is off',
+                subtitle: settings.voiceOutputEnabled
+                    ? 'Replies are also read aloud.'
+                    : 'Replies appear as text only.',
+                value: settings.voiceOutputEnabled,
+                onChanged: (on) =>
+                    service.setVoiceOutputEnabled(recipientId, on),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _settingRow({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required Future<void> Function(bool) onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: PhotoTalkPalette.textSecondary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: PhotoTalkText.body
+                      .copyWith(fontWeight: FontWeight.w600)),
+              Text(subtitle, style: PhotoTalkText.caption),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          activeColor: PhotoTalkPalette.primary,
+          onChanged: (on) async {
+            try {
+              await onChanged(on);
+            } catch (e) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: PhotoTalkPalette.accentRose,
+                  content: Text("Couldn't change setting: $e",
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 
