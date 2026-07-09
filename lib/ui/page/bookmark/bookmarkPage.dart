@@ -1,31 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
-import 'package:flutter_twitter_clone/state/bookmarkState.dart';
+import 'package:flutter_twitter_clone/services/favorites_service.dart';
+import 'package:flutter_twitter_clone/state/authState.dart';
+import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/companionPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/musicCaptionsPage.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:flutter_twitter_clone/ui/page/photoTalk/widgets/memoryCard.dart';
 import 'package:provider/provider.dart';
 
-/// Saved Memories — the PhotoTalk-styled replacement for the bookmark page.
-/// Reuses the existing BookmarkState which already loads bookmarked items
-/// from Firebase, but renders them as photo-first memory cards.
-class BookmarkPage extends StatelessWidget {
+/// Saved memories — memories any care-circle member has favorited by
+/// tapping the heart on a memory card.
+///
+/// Storage: /favorites/{recipientId}/{memoryKey} = {savedAt, savedByUid}
+/// The actual memory content is hydrated from FeedState at render time —
+/// we only store references so favorites stay consistent when a memory
+/// is edited elsewhere.
+class BookmarkPage extends StatefulWidget {
   const BookmarkPage({Key? key}) : super(key: key);
 
-  static Route<T> getRoute<T>() {
-    return MaterialPageRoute(
-      builder: (_) {
-        return ChangeNotifierProvider(
-          create: (_) => BookmarkState(),
-          child: const BookmarkPage(),
-        );
-      },
-    );
-  }
+  static Route<T> getRoute<T>() =>
+      MaterialPageRoute(builder: (_) => const BookmarkPage());
+
+  @override
+  State<BookmarkPage> createState() => _BookmarkPageState();
+}
+
+class _BookmarkPageState extends State<BookmarkPage> {
+  final FavoritesService _favorites = FavoritesService();
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+    final feed = context.watch<FeedState>();
+    final recipientId = auth.userModel?.linkedRecipientId ??
+        auth.userModel?.userId ??
+        auth.user?.uid;
+
     return Scaffold(
       backgroundColor: PhotoTalkPalette.background,
       appBar: AppBar(
@@ -34,54 +45,104 @@ class BookmarkPage extends StatelessWidget {
         foregroundColor: PhotoTalkPalette.textPrimary,
         title: Text('Saved memories', style: PhotoTalkText.title),
       ),
-      body: const _BookmarkBody(),
+      body: recipientId == null
+          ? _emptyState('Sign in to see saved memories.')
+          : StreamBuilder<List<FavoriteEntry>>(
+              stream: _favorites.watch(recipientId),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final entries = snap.data ?? const <FavoriteEntry>[];
+                if (entries.isEmpty) {
+                  return _emptyState(
+                    "Tap the heart on any memory to save it here. "
+                    "Anyone in the care circle can add — everyone sees them.",
+                  );
+                }
+                // Hydrate favorites from the currently loaded feed.
+                final feedByKey = {
+                  for (final m in (feed.feedList ?? const <FeedModel>[]))
+                    if (m.key != null) m.key!: m,
+                };
+                final memories = <FeedModel>[];
+                for (final e in entries) {
+                  final m = feedByKey[e.memoryKey];
+                  if (m != null) memories.add(m);
+                }
+                if (memories.isEmpty) {
+                  return _emptyState(
+                    "You have ${entries.length} saved "
+                    "${entries.length == 1 ? 'memory' : 'memories'} but "
+                    "we couldn't load them from the feed yet. Pull to refresh.",
+                  );
+                }
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: memories.length,
+                      itemBuilder: (_, i) => _cardFor(
+                        context,
+                        memories[i],
+                        recipientId: recipientId,
+                        currentUid:
+                            auth.user?.uid ?? auth.userModel?.userId ?? '',
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
-}
 
-class _BookmarkBody extends StatelessWidget {
-  const _BookmarkBody({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<BookmarkState>();
-    final list = state.tweetList;
-
-    if (state.isbusy) {
-      return const Center(child: CircularProgressIndicator());
+  Widget _cardFor(
+    BuildContext context,
+    FeedModel m, {
+    required String recipientId,
+    required String currentUid,
+  }) {
+    final desc = m.description ?? '';
+    final caption =
+        desc.trim().isEmpty ? 'A saved memory' : desc.split('\n').first;
+    String? extract(String prefix) {
+      for (final line in desc.split('\n').skip(1)) {
+        if (line.startsWith(prefix)) return line.substring(prefix.length).trim();
+      }
+      return null;
     }
-    if (list == null || list.isEmpty) {
-      return _emptyState(context);
-    }
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680),
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: list.length,
-          itemBuilder: (_, i) => _cardFor(context, list[i]),
-        ),
-      ),
-    );
-  }
 
-  Widget _cardFor(BuildContext context, FeedModel m) {
-    final caption = (m.description ?? '').trim().isEmpty
-        ? 'A saved memory'
-        : m.description!.split('\n').first;
+    final who = extract('Who:') ?? m.user?.displayName;
     return MemoryCard(
       caption: caption,
-      who: m.user?.displayName,
+      who: who,
+      where: extract('Where:'),
+      why: extract('Why it matters:'),
       song: m.songTitle,
       hasAudio: m.audioPath != null && m.audioPath!.isNotEmpty,
       imageUrl: m.imagePath,
       imageUrls: m.imagePaths,
       tags: m.tags ?? const [],
+      isFavorite: true, // always true on this tab
+      onFavoriteToggle: () async {
+        if (m.key == null) return;
+        await _favorites.remove(
+          recipientId: recipientId,
+          memoryKey: m.key!,
+        );
+      },
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompanionPage(
           caption: caption,
           imageUrl: m.imagePath,
-          who: m.user?.displayName,
+          who: who,
+          where: extract('Where:'),
+          why: extract('Why it matters:'),
+          song: extract('Song:'),
+          tags: m.tags ?? const [],
+          seededPrompts: m.prompts ?? const [],
         ),
       )),
       onPlayMusic: () => Navigator.of(context).push(MaterialPageRoute(
@@ -95,7 +156,7 @@ class _BookmarkBody extends StatelessWidget {
     );
   }
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState(String message) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -109,7 +170,7 @@ class _BookmarkBody extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.bookmark_outline_rounded,
+              Icons.favorite_border_rounded,
               size: 60,
               color: PhotoTalkPalette.primary,
             ),
@@ -119,7 +180,7 @@ class _BookmarkBody extends StatelessWidget {
               style: PhotoTalkText.h2, textAlign: TextAlign.center),
           const SizedBox(height: 8),
           Text(
-            'Memories you save will live here, ready to revisit.',
+            message,
             textAlign: TextAlign.center,
             style: PhotoTalkText.caption.copyWith(fontSize: 16),
           ),

@@ -24,6 +24,8 @@ class MemoryCard extends StatefulWidget {
     this.onTalk,
     this.onPlayMusic,
     this.onTap,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
   }) : super(key: key);
 
   final String caption;
@@ -44,6 +46,11 @@ class MemoryCard extends StatefulWidget {
   final VoidCallback? onTalk;
   final VoidCallback? onPlayMusic;
   final VoidCallback? onTap;
+  /// True when this memory is on the recipient's favorites list. Renders
+  /// the heart filled.
+  final bool isFavorite;
+  /// Called when the heart is tapped. When null the heart is hidden.
+  final VoidCallback? onFavoriteToggle;
 
   @override
   State<MemoryCard> createState() => _MemoryCardState();
@@ -81,6 +88,8 @@ class _MemoryCardState extends State<MemoryCard> {
   VoidCallback? get onTalk => widget.onTalk;
   VoidCallback? get onPlayMusic => widget.onPlayMusic;
   VoidCallback? get onTap => widget.onTap;
+  bool get isFavorite => widget.isFavorite;
+  VoidCallback? get onFavoriteToggle => widget.onFavoriteToggle;
   String? get imageUrl =>
       _allImages.isNotEmpty ? _allImages.first : null;
 
@@ -140,6 +149,41 @@ class _MemoryCardState extends State<MemoryCard> {
   }
 
   Widget _photo() {
+    return Stack(
+      children: [
+        _photoBody(),
+        if (onFavoriteToggle != null)
+          Positioned(
+            top: 10,
+            left: 12,
+            child: _favoriteButton(),
+          ),
+      ],
+    );
+  }
+
+  Widget _favoriteButton() {
+    return Material(
+      color: Colors.black54,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onFavoriteToggle,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: isFavorite
+                ? PhotoTalkPalette.accentRose
+                : Colors.white,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _photoBody() {
     final radius = const BorderRadius.vertical(top: Radius.circular(20));
     final images = _allImages;
     if (images.isEmpty) {

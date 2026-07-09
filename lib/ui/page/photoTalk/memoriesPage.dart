@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
+import 'package:flutter_twitter_clone/services/favorites_service.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +37,10 @@ class _MemoriesPageState extends State<MemoriesPage> {
   Timer? _loadingTimeout;
   bool _timedOut = false;
 
+  final FavoritesService _favorites = FavoritesService();
+  StreamSubscription<Set<String>>? _favoritesSub;
+  Set<String> _favoriteKeys = const {};
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +48,56 @@ class _MemoriesPageState extends State<MemoriesPage> {
     _loadingTimeout = Timer(const Duration(seconds: 5), () {
       if (mounted) setState(() => _timedOut = true);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _watchFavorites());
+  }
+
+  void _watchFavorites() {
+    final auth = Provider.of<AuthState>(context, listen: false);
+    final recipientId = auth.userModel?.linkedRecipientId ??
+        auth.userModel?.userId ??
+        auth.user?.uid;
+    if (recipientId == null) return;
+    _favoritesSub?.cancel();
+    _favoritesSub = _favorites.watchKeys(recipientId).listen((keys) {
+      if (mounted) setState(() => _favoriteKeys = keys);
+    });
+  }
+
+  Future<void> _toggleFavorite(FeedModel model) async {
+    final key = model.key;
+    if (key == null) return;
+    final auth = Provider.of<AuthState>(context, listen: false);
+    final recipientId = auth.userModel?.linkedRecipientId ??
+        auth.userModel?.userId ??
+        auth.user?.uid;
+    final myUid = auth.user?.uid ?? auth.userModel?.userId;
+    if (recipientId == null || myUid == null) return;
+    try {
+      if (_favoriteKeys.contains(key)) {
+        await _favorites.remove(
+            recipientId: recipientId, memoryKey: key);
+      } else {
+        await _favorites.save(
+          recipientId: recipientId,
+          memoryKey: key,
+          savedByUid: myUid,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: PhotoTalkPalette.accentRose,
+          content: Text("Couldn't update favorites: $e",
+              style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _favoritesSub?.cancel();
     _loadingTimeout?.cancel();
     super.dispose();
   }
@@ -371,6 +422,10 @@ class _MemoriesPageState extends State<MemoriesPage> {
       imageUrl: model.imagePath,
       imageUrls: model.imagePaths,
       tags: tags,
+      isFavorite:
+          model.key != null && _favoriteKeys.contains(model.key),
+      onFavoriteToggle:
+          model.key == null ? null : () => _toggleFavorite(model),
       onTalk: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompanionPage(
           caption: p.caption,

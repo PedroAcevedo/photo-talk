@@ -47,6 +47,15 @@
         ".read": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))",
         ".write": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))"
       }
+    },
+
+    "favorites": {
+      "$recipientId": {
+        ".read": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))",
+        "$memoryKey": {
+          ".write": "auth != null && (auth.uid === $recipientId || (root.child('profile').child(auth.uid).child('linkedRecipientId').val() === $recipientId))"
+        }
+      }
     }
   }
 }
