@@ -29,6 +29,11 @@ class FeedModel {
   /// PhotoTalk: optional human-readable song title separate from the
   /// audio URL.
   String? songTitle;
+  /// PhotoTalk: an optional external media link (YouTube / Spotify /
+  /// Apple Music etc.) that opens in an in-app webview overlay from
+  /// Music + Captions mode. Used when the family doesn't want to (or
+  /// can't) upload an audio file.
+  String? externalMediaUrl;
   /// PhotoTalk: multi-photo support. When a memory carries more than one
   /// image the URLs live here. [imagePath] is kept as the first entry so
   /// older code paths (and legacy data) still resolve.
@@ -56,7 +61,8 @@ class FeedModel {
       this.audioPath,
       this.songTitle,
       this.imagePaths,
-      this.prompts});
+      this.prompts,
+      this.externalMediaUrl});
   toJson() {
     return {
       "userId": userId,
@@ -78,6 +84,7 @@ class FeedModel {
       "songTitle": songTitle,
       "imagePaths": imagePaths,
       "prompts": prompts,
+      "externalMediaUrl": externalMediaUrl,
     };
   }
 
@@ -98,6 +105,7 @@ class FeedModel {
     careRecipientId = map['careRecipientId'];
     audioPath = map['audioPath'];
     songTitle = map['songTitle'];
+    externalMediaUrl = map['externalMediaUrl'];
     if (map['imagePaths'] != null) {
       imagePaths = <String>[];
       map['imagePaths'].forEach((value) {

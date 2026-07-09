@@ -1,11 +1,16 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
+import 'externalMediaOverlay.dart';
 import 'photoTalkTheme.dart';
 
 /// Music + Captions Mode — large photo, on-screen caption, real audio
 /// playback driven by [audioplayers]. If no [audioUrl] is provided the
 /// player shows a calm "no audio attached" state.
+///
+/// When [externalMediaUrl] is provided, an *Open song link* button opens
+/// the URL in a full-screen [ExternalMediaOverlay] webview. Closing the
+/// overlay returns to the exact same photo + caption + player state.
 class MusicCaptionsPage extends StatefulWidget {
   const MusicCaptionsPage({
     Key? key,
@@ -13,12 +18,14 @@ class MusicCaptionsPage extends StatefulWidget {
     this.imageUrl,
     this.song,
     this.audioUrl,
+    this.externalMediaUrl,
   }) : super(key: key);
 
   final String caption;
   final String? imageUrl;
   final String? song;
   final String? audioUrl;
+  final String? externalMediaUrl;
 
   @override
   State<MusicCaptionsPage> createState() => _MusicCaptionsPageState();
@@ -33,6 +40,25 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
 
   bool get _hasAudio =>
       widget.audioUrl != null && widget.audioUrl!.isNotEmpty;
+  bool get _hasExternal =>
+      widget.externalMediaUrl != null &&
+          widget.externalMediaUrl!.isNotEmpty;
+
+  Future<void> _openExternal() async {
+    if (!_hasExternal) return;
+    // Pause any local audio so it doesn't play under the webview.
+    if (_state == PlayerState.playing) {
+      try {
+        await _player.pause();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await ExternalMediaOverlay.open(
+      context,
+      url: widget.externalMediaUrl!,
+      title: widget.song,
+    );
+  }
 
   @override
   void initState() {
@@ -101,7 +127,10 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final song = widget.song ?? (_hasAudio ? 'A gentle melody' : 'No song attached');
+    final song = widget.song ??
+        (_hasAudio
+            ? 'A gentle melody'
+            : (_hasExternal ? 'External link' : 'No song attached'));
     return Scaffold(
       backgroundColor: PhotoTalkPalette.accentBlue,
       appBar: AppBar(
@@ -207,7 +236,9 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
               Icon(
                 _hasAudio
                     ? Icons.music_note_rounded
-                    : Icons.music_off_rounded,
+                    : (_hasExternal
+                        ? Icons.link_rounded
+                        : Icons.music_off_rounded),
                 color: PhotoTalkPalette.accentBlue,
               ),
               const SizedBox(width: 10),
@@ -298,6 +329,30 @@ class _MusicCaptionsPageState extends State<MusicCaptionsPage> {
               ),
             ],
           ),
+          if (_hasExternal) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openExternal,
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: Text(_hasAudio
+                    ? 'Open song link'
+                    : 'Open in YouTube / Spotify'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: PhotoTalkPalette.accentBlue,
+                  side: const BorderSide(
+                      color: PhotoTalkPalette.accentBlue, width: 1.5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  textStyle:
+                      const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

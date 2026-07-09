@@ -418,7 +418,9 @@ class _MemoriesPageState extends State<MemoriesPage> {
       where: p.where,
       why: p.why,
       song: model.songTitle ?? p.song,
-      hasAudio: model.audioPath != null && model.audioPath!.isNotEmpty,
+      hasAudio: (model.audioPath != null && model.audioPath!.isNotEmpty) ||
+          (model.externalMediaUrl != null &&
+              model.externalMediaUrl!.isNotEmpty),
       imageUrl: model.imagePath,
       imageUrls: model.imagePaths,
       tags: tags,
@@ -444,6 +446,7 @@ class _MemoriesPageState extends State<MemoriesPage> {
           imageUrl: model.imagePath,
           song: model.songTitle ?? p.song,
           audioUrl: model.audioPath,
+          externalMediaUrl: model.externalMediaUrl,
         ),
       )),
     );

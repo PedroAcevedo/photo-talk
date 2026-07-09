@@ -121,7 +121,8 @@ class _BookmarkPageState extends State<BookmarkPage> {
       where: extract('Where:'),
       why: extract('Why it matters:'),
       song: m.songTitle,
-      hasAudio: m.audioPath != null && m.audioPath!.isNotEmpty,
+      hasAudio: (m.audioPath != null && m.audioPath!.isNotEmpty) ||
+          (m.externalMediaUrl != null && m.externalMediaUrl!.isNotEmpty),
       imageUrl: m.imagePath,
       imageUrls: m.imagePaths,
       tags: m.tags ?? const [],
@@ -151,6 +152,7 @@ class _BookmarkPageState extends State<BookmarkPage> {
           imageUrl: m.imagePath,
           song: m.songTitle,
           audioUrl: m.audioPath,
+          externalMediaUrl: m.externalMediaUrl,
         ),
       )),
     );

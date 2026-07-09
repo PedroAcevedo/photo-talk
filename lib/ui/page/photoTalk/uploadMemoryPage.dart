@@ -43,6 +43,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
   final _where = TextEditingController();
   final _why = TextEditingController();
   final _song = TextEditingController();
+  final _mediaLink = TextEditingController();
   bool _submitting = false;
   // AI prompt suggestions. Once the family asks for suggestions, we keep
   // them here and persist them with the memory.
@@ -56,6 +57,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     _where.dispose();
     _why.dispose();
     _song.dispose();
+    _mediaLink.dispose();
     super.dispose();
   }
 
@@ -323,6 +325,15 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
       model.songTitle = _song.text.trim();
     }
 
+    // External media link (YouTube / Spotify / Apple Music) — persisted
+    // only when it looks like a URL to avoid saving accidental typos.
+    final link = _mediaLink.text.trim();
+    if (link.isNotEmpty) {
+      final looksLikeUrl =
+          RegExp(r'^https?://', caseSensitive: false).hasMatch(link);
+      model.externalMediaUrl = looksLikeUrl ? link : 'https://$link';
+    }
+
     final db = FirebaseDatabase.instance.ref();
     final newRef = db.child('tweet').push();
     await newRef.set(model.toJson());
@@ -412,6 +423,13 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
                 label: 'Song (optional)',
                 hint: 'Here Comes the Sun — The Beatles',
                 icon: Icons.music_note_rounded,
+              ),
+              _field(
+                controller: _mediaLink,
+                label: 'External media link (optional)',
+                hint: 'YouTube, Spotify, or Apple Music URL',
+                icon: Icons.link_rounded,
+                keyboard: TextInputType.url,
               ),
               const SizedBox(height: 12),
               _suggestedPromptsBlock(),
@@ -608,6 +626,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
     required String hint,
     IconData? icon,
     int maxLines = 1,
+    TextInputType keyboard = TextInputType.text,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -627,6 +646,7 @@ class _UploadMemoryPageState extends State<UploadMemoryPage> {
           TextField(
             controller: controller,
             maxLines: maxLines,
+            keyboardType: keyboard,
             style: PhotoTalkText.bodyLarge,
             decoration: InputDecoration(
               hintText: hint,
