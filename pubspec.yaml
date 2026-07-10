@@ -60,6 +60,14 @@ dependencies:
   record: ^5.1.2
   path_provider: ^2.1.4
 
+# The transitive `record_linux` 0.7.2 that the resolver picks by default
+# does not implement `startStream` / the new `hasPermission` signature
+# added in `record_platform_interface: 1.6.0`, so kernel_snapshot fails
+# even on Android builds. Pin the Linux impl to the current release that
+# actually matches the 1.6.0 interface.
+dependency_overrides:
+  record_linux: ^1.3.0
+
 dev_dependencies:
   test: ^1.17.10
   flutter_test:
