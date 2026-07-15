@@ -90,3 +90,4 @@ android/app/google-services-dev.json
 android/app/google-services-pro.json
 lib/firebase_options.dart
 firebase.json
+node_modules/
