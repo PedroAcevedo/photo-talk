@@ -74,19 +74,13 @@ class WelcomePage extends StatelessWidget {
   }
 
   Widget _logo() {
-    return Container(
-      width: 120,
-      height: 120,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: PhotoTalkPalette.primary.withOpacity(0.12),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.photo_library_rounded,
-        size: 64,
-        color: PhotoTalkPalette.primary,
-      ),
+    // Hero PhotoTalk mark. The logo already lives on the cream palette
+    // background, so no colored container is needed behind it.
+    return Image.asset(
+      'assets/images/icon-480.png',
+      width: 180,
+      height: 180,
+      fit: BoxFit.contain,
     );
   }
 
