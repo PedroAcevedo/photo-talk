@@ -3,6 +3,7 @@ import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/state/authState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
+import 'package:flutter_twitter_clone/ui/page/photoTalk/photoTalkTheme.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
 import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
 import 'package:flutter_twitter_clone/widgets/newWidget/customLoader.dart';
@@ -136,7 +137,14 @@ class _FeedPageBody extends StatelessWidget {
             );
           },
         ),
-        title: Image.asset('assets/images/icon-480.png', height: 40),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/photo_talk_glyph.png', height: 32),
+            const SizedBox(width: 8),
+            Text('PhotoTalk', style: PhotoTalkText.title),
+          ],
+        ),
         centerTitle: true,
         iconTheme: IconThemeData(color: Theme.of(context).primaryColor),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,

@@ -91,7 +91,7 @@ class CustomScreenLoader extends StatelessWidget {
                       strokeWidth: 2,
                     ),
               Image.asset(
-                'assets/images/icon-480.png',
+                'assets/images/photo_talk_glyph.png',
                 height: 30,
                 width: 30,
               )

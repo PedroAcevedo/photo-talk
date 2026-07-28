@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!--
+    PhotoTalk simplified glyph.
+    Speech bubble in cream with teal stroke, containing a microphone
+    silhouette. Reads clearly at 24-40px for the app bar and loader; the
+    hand-drawn full mark stays on Welcome / splash / launcher.
+    Palette: teal #1F6E7E, cream #F8F4ED.
+  -->
+  <!-- Speech bubble body -->
+  <path
+    d="
+      M 96 96
+      h 320
+      a 48 48 0 0 1 48 48
+      v 200
+      a 48 48 0 0 1 -48 48
+      h -128
+      l -60 60
+      l -12 -60
+      h -120
+      a 48 48 0 0 1 -48 -48
+      v -200
+      a 48 48 0 0 1 48 -48
+      z"
+    fill="#F8F4ED"
+    stroke="#1F6E7E"
+    stroke-width="24"
+    stroke-linejoin="round"/>
+  <!-- Microphone capsule -->
+  <rect x="228" y="150" width="56" height="120" rx="28" ry="28"
+        fill="#1F6E7E"/>
+  <!-- U-shaped mic frame -->
+  <path
+    d="M 200 230
+       v 20
+       a 56 56 0 0 0 112 0
+       v -20"
+    fill="none"
+    stroke="#1F6E7E"
+    stroke-width="16"
+    stroke-linecap="round"/>
+  <!-- Mic stem -->
+  <line x1="256" y1="306" x2="256" y2="340"
+        stroke="#1F6E7E" stroke-width="16" stroke-linecap="round"/>
+  <!-- Mic base -->
+  <line x1="220" y1="342" x2="292" y2="342"
+        stroke="#1F6E7E" stroke-width="16" stroke-linecap="round"/>
+</svg>
