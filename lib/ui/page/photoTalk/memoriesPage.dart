@@ -164,8 +164,8 @@ class _MemoriesPageState extends State<MemoriesPage> {
                 ),
                 title: Row(
                   children: [
-                    const Icon(Icons.photo_library_rounded,
-                        color: PhotoTalkPalette.primary, size: 26),
+                    Image.asset('assets/images/photo_talk_glyph.png',
+                        height: 28),
                     const SizedBox(width: 8),
                     Text('PhotoTalk',
                         style: PhotoTalkText.title.copyWith(fontSize: 22)),
@@ -293,18 +293,12 @@ class _MemoriesPageState extends State<MemoriesPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: PhotoTalkPalette.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.photo_library_outlined,
-              size: 60,
-              color: PhotoTalkPalette.primary,
-            ),
+          // Empty-state hero — use the PhotoTalk mark rather than a
+          // generic photo-library glyph so the brand reads even here.
+          Image.asset(
+            'assets/images/icon-480.png',
+            width: 140,
+            height: 140,
           ),
           const SizedBox(height: 20),
           Text('No photos today',
