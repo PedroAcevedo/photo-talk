@@ -98,6 +98,7 @@ flutter:
     - assets/images/icon-48.png
     - assets/images/icon-480.png
     - assets/images/icon-400.png
+    - assets/images/photo_talk_glyph.png
     - assets/images/qr.png
     - assets/images/bulb.png
     - assets/images/google_logo.png
