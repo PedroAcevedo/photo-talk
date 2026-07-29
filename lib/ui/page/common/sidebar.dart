@@ -160,17 +160,15 @@ class _SidebarMenuState extends State<SidebarMenu> {
   Future<void> _logOut() async {
     final state = Provider.of<AuthState>(context, listen: false);
     final feedState = Provider.of<FeedState>(context, listen: false);
-    final rootContext = context;
-    // Close the drawer first so it doesn't sit on top of the new route.
-    Navigator.pop(context);
     feedState.reset();
     await state.logoutCallback();
-    if (!rootContext.mounted) return;
     // Throw away the entire widget tree (and every Provider with it) so
     // no listener, no cached profile, and no view of the previous user
     // survives. The fresh tree boots through SplashPage, sees no signed-in
-    // user, and lands on WelcomePage.
-    AppRestarter.restart(rootContext);
+    // user, and lands on WelcomePage. AppRestarter.restart() uses an
+    // app-wide GlobalKey so it works even though the drawer's context is
+    // about to be torn down.
+    AppRestarter.restart();
   }
 
   void _navigateTo(String path) {

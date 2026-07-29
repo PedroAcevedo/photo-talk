@@ -21,7 +21,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   setupDependencies();
-  runApp(const AppRestarter(child: MyApp()));
+  runApp(AppRestarter(child: const MyApp()));
 }
 
 /// Tiny inherited-widget restarter: changing the [Key] passed to the
@@ -31,11 +31,22 @@ void main() async {
 /// We use this for logout so the previously signed-in user can't linger
 /// in memory.
 class AppRestarter extends StatefulWidget {
-  const AppRestarter({Key? key, required this.child}) : super(key: key);
+  // A single, app-wide GlobalKey so [restart] never needs a live BuildContext.
+  // Callers that pop a Drawer or run past an async gap would otherwise see
+  // their local context marked unmounted and the restart would silently
+  // no-op — this side-steps that entirely.
+  static final GlobalKey<_AppRestarterState> _restarterKey =
+      GlobalKey<_AppRestarterState>();
+
+  AppRestarter({Key? key, required this.child})
+      : super(key: key ?? _restarterKey);
   final Widget child;
 
-  static void restart(BuildContext context) {
-    context.findAncestorStateOfType<_AppRestarterState>()?._restart();
+  /// Rebuild the entire app tree. Safe to call from anywhere — after an
+  /// async gap, from a widget that's about to unmount, or from a drawer
+  /// that's just been popped.
+  static void restart() {
+    _restarterKey.currentState?._restart();
   }
 
   @override

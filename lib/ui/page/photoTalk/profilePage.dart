@@ -346,11 +346,11 @@ class PhotoTalkProfilePage extends StatelessWidget {
           // signed-out screen) never reads the previous user's data.
           feedState.reset();
           await state.logoutCallback();
-          if (!context.mounted) return;
           // Rebuild the whole app tree so every Provider is fresh and
           // SplashPage re-checks Firebase Auth. Nothing from the old
-          // session survives.
-          AppRestarter.restart(context);
+          // session survives. Uses AppRestarter's app-wide GlobalKey so
+          // we don't need this widget's context to still be mounted.
+          AppRestarter.restart();
         },
         icon: const Icon(Icons.logout_rounded),
         label: const Text('Sign out',
