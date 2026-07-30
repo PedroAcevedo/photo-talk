@@ -36,25 +36,41 @@ class AuthState extends AppState {
 
   UserModel? get profileUserModel => _userModel;
 
-  /// Logout from device
+  /// Logout from device.
+  ///
+  /// IMPORTANT: do NOT `.drain()` the Firebase RTDB profile stream — RTDB
+  /// live subscriptions never complete, so `await drain()` would hang
+  /// forever and every step below (signOut, notifyListeners, and the
+  /// AppRestarter call at the callsite) would never run. Users would see
+  /// "nothing happens" after tapping Sign out. AppRestarter tears down
+  /// the whole widget tree on logout, so the profile listener dies with
+  /// this state object — we just need to null the reference here.
   Future<void> logoutCallback() async {
+    // Flip local state and notify listeners FIRST so any Consumer that
+    // watches authStatus can react immediately.
     authStatus = AuthStatus.NOT_LOGGED_IN;
     userId = '';
     _userModel = null;
     user = null;
-    // Guard: _profileQuery is null on accounts that never reached the
-    // post-signup wiring (and on fresh installs).
-    try {
-      await _profileQuery?.onValue.drain();
-    } catch (_) {}
     _profileQuery = null;
-    if (isSignInWithGoogle) {
-      _googleSignIn.signOut();
-      Utility.logEvent('google_logout', parameter: {});
-      isSignInWithGoogle = false;
-    }
-    await _firebaseAuth.signOut();
     notifyListeners();
+
+    // Actually sign out. If any of these throw we still want the caller's
+    // AppRestarter.restart() to fire, so isolate failures.
+    try {
+      if (isSignInWithGoogle) {
+        await _googleSignIn.signOut();
+        Utility.logEvent('google_logout', parameter: {});
+        isSignInWithGoogle = false;
+      }
+    } catch (e) {
+      cprint(e, errorIn: 'logoutCallback/google');
+    }
+    try {
+      await _firebaseAuth.signOut();
+    } catch (e) {
+      cprint(e, errorIn: 'logoutCallback/firebase');
+    }
     try {
       await getIt<SharedPreferenceHelper>().clearPreferenceValues();
     } catch (_) {}
